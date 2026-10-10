@@ -5,6 +5,23 @@ import {
   CreditCard, Banknote, X, History, Download, Image as ImageIcon, Package, AlertTriangle, Upload, IceCream, Lock, Eye, EyeOff, Settings, Volume2, VolumeX, Mic
 } from 'lucide-react';
 
+// --- FIREBASE INITIALIZATION ---
+import { initializeApp } from "firebase/app";
+import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc } from "firebase/firestore";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAsmMqePWXD27z7EMAOUetSC5HqV03ScpM",
+  authDomain: "eternalcrust.firebaseapp.com",
+  projectId: "eternalcrust",
+  storageBucket: "eternalcrust.firebasestorage.app",
+  messagingSenderId: "261216829451",
+  appId: "1:261216829451:web:325aaac3d97a5a9280070e",
+  measurementId: "G-2EWDLMFX8K"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
 /* ---------------- AUDIO & VOICE ENGINE ---------------- */
 let AC = null;
 let SOUND_ENABLED = true;
@@ -51,78 +68,9 @@ const CAFE_NAME = 'ETERNAL CRUST CAFÉ';
 
 const getQrUrl = (url) => `https://api.qrserver.com/v1/create-qr-code/?size=400x400&margin=10&color=6b21a8&data=${encodeURIComponent(url)}`;
 
-function usePersist(key, init) {
-  const [v, setV] = useState(() => { try { const s = localStorage.getItem('ec_' + key); return s ? JSON.parse(s) : init; } catch { return init; } });
-  useEffect(() => { try { localStorage.setItem('ec_' + key, JSON.stringify(v)); } catch (e) {} }, [v, key]);
-  return [v, setV];
-}
-
 const readImg = (f) => new Promise((res) => {
   const r = new FileReader(); r.onload = () => { const im = new Image(); im.onload = () => { const c = document.createElement('canvas'); const s = Math.min(1, 600 / Math.max(im.width, im.height)); c.width = im.width * s; c.height = im.height * s; c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); res(c.toDataURL('image/jpeg', 0.8)); }; im.src = r.result; }; r.readAsDataURL(f);
 });
-
-// Initial Huge Menu Data
-const initialMenu = [
-  { id: 'p1', category: 'Pizza', name: 'Small Pizza', price: 139, desc: '6 inch regular crust', stock: true },
-  { id: 'p2', category: 'Pizza', name: 'Classic Margarita Pizza', price: 149, v: [['Regular', 149], ['Large', 189]], desc: 'Double cheese layer', stock: true },
-  { id: 'p3', category: 'Pizza', name: 'Paneer Mushroom Pizza', price: 169, v: [['Regular', 169], ['Large', 189]], desc: 'Fresh paneer & mushrooms', stock: true },
-  { id: 'p4', category: 'Pizza', name: 'Cheese Chilli Pizza', price: 169, v: [['Regular', 169], ['Large', 199]], desc: 'Spicy chili flakes with mozzarella', stock: true },
-  { id: 'p5', category: 'Pizza', name: 'Hot Garlic Pizza', price: 169, v: [['Regular', 169], ['Large', 199]], desc: 'Roasted garlic & spices', stock: true },
-  { id: 'p6', category: 'Pizza', name: 'Vegetable Delight Pizza', price: 179, v: [['Regular', 179], ['Large', 209]], desc: 'Loaded with fresh veggies', stock: true },
-  { id: 'p7', category: 'Pizza', name: 'Veg Crispy Corn Pizza', price: 179, v: [['Regular', 179], ['Large', 209]], desc: 'Sweet corn & capsicum', stock: true },
-  { id: 'p8', category: 'Pizza', name: 'Tandoori Paneer Tikka Pizza', price: 199, v: [['Regular', 199], ['Large', 229]], desc: 'Tandoori sauce base', stock: true },
-  { id: 'p9', category: 'Pizza', name: 'Paneer Makhani Pizza', price: 199, v: [['Regular', 199], ['Large', 229]], desc: 'Makhani gravy base', stock: true },
-  { id: 'p10', category: 'Pizza', name: 'Vegetable Tandoor Pizza', price: 199, v: [['Regular', 199], ['Large', 219]], desc: 'Tandoori flavored veggies', stock: true },
-  { id: 'p11', category: 'Pizza', name: 'BBQ Paneer Pizza', price: 209, v: [['Regular', 209], ['Large', 239]], desc: 'Barbeque sauce base', stock: true },
-  { id: 'p12', category: 'Pizza', name: 'Eternal Crust Special Pizza', price: 219, v: [['Regular', 219], ['Large', 249]], desc: 'Chef\'s special loaded pizza', stock: true },
-  
-  { id: 'gb1', category: 'Garlic Bread', name: 'Classic Garlic Bread', price: 99, desc: 'Freshly baked', stock: true },
-  { id: 'gb2', category: 'Garlic Bread', name: 'Cheese Chilli Garlic Bread', price: 109, desc: 'With mozzarella & chili', stock: true },
-  { id: 'gb3', category: 'Garlic Bread', name: 'Cheese Corn Garlic Bread', price: 109, desc: 'With sweet corn', stock: true },
-  
-  { id: 'pa1', category: 'Pasta', name: 'Penne Arrabiata Pasta', price: 139, desc: 'Red sauce spicy pasta', stock: true },
-  { id: 'pa2', category: 'Pasta', name: 'Alfredo Pasta', price: 139, desc: 'White sauce creamy pasta', stock: true },
-  { id: 'pa3', category: 'Pasta', name: 'Mamma Rosa Pasta', price: 139, desc: 'Pink sauce pasta', stock: true },
-  { id: 'pa4', category: 'Pasta', name: 'Spaghetti Aglio Olio', price: 139, desc: 'Olive oil & garlic', stock: true },
-  { id: 'pa5', category: 'Pasta', name: 'Mushroom Pasta', price: 169, desc: 'Creamy mushroom sauce', stock: true },
-  { id: 'pa6', category: 'Pasta', name: 'Paneer Tikka Pasta', price: 169, desc: 'Indian fusion pasta', stock: true },
-  
-  { id: 'f1', category: 'Fries', name: 'Classic Fries', price: 79, desc: 'Salted french fries', stock: true },
-  { id: 'f2', category: 'Fries', name: 'Peri Peri Fries', price: 89, desc: 'Spicy peri peri mix', stock: true },
-  { id: 'f3', category: 'Fries', name: 'Schezwan French Fries', price: 99, desc: 'Tossed in schezwan sauce', stock: true },
-  { id: 'f4', category: 'Fries', name: 'Chilli Garlic Fries', price: 109, desc: 'Spicy chili garlic toss', stock: true },
-  { id: 'f5', category: 'Fries', name: 'Cheese Loaded Fries', price: 119, desc: 'Topped with liquid cheese', stock: true },
-
-  { id: 's1', category: 'Sandwich', name: 'Vegetable Sandwich', price: 69, desc: 'Plain veg sandwich', stock: true },
-  { id: 's2', category: 'Sandwich', name: 'Russian Salad Sandwich', price: 79, desc: 'Creamy veg salad filling', stock: true },
-  { id: 's3', category: 'Sandwich', name: 'Mumbai Club Sandwich', price: 89, desc: '3 layer club sandwich', stock: true },
-  { id: 's4', category: 'Sandwich', name: 'Vegetable Grill Sandwich', price: 89, desc: 'Grilled veg sandwich', stock: true },
-  { id: 's5', category: 'Sandwich', name: 'Vegetable Cheese Grill', price: 109, desc: 'Grilled with cheese', stock: true },
-  { id: 's6', category: 'Sandwich', name: 'Chilli Cheese Onion Club Grill', price: 119, desc: 'Spicy onion cheese filling', stock: true },
-  { id: 's7', category: 'Sandwich', name: 'Paneer Tikka Grill', price: 149, desc: 'Paneer tikka stuffing', stock: true },
-  { id: 's8', category: 'Sandwich', name: 'Mushroom Cheese Grill', price: 149, desc: 'Mushroom & cheese stuffing', stock: true },
-
-  { id: 'b1', category: 'Burger', name: 'Vegetable Burger', price: 89, desc: 'Aloo tikki burger', stock: true },
-  { id: 'b2', category: 'Burger', name: 'Vegetable Cheese Burger', price: 109, desc: 'Veg patty with cheese slice', stock: true },
-  { id: 'b3', category: 'Burger', name: 'Paneer Tikka Crispy Burger', price: 149, desc: 'Crispy paneer patty', stock: true },
-  { id: 'b4', category: 'Burger', name: 'Cheese Burst Burger', price: 179, desc: 'Liquid cheese filled patty', stock: true },
-  { id: 'b5', category: 'Burger', name: 'Maharaja Burger', price: 189, desc: 'Double patty giant burger', stock: true },
-  
-  { id: 'w1', category: 'Waffles', name: 'Classic Waffle', price: 89, desc: 'Maple syrup / Honey', stock: true },
-  { id: 'w2', category: 'Waffles', name: 'Chocolate Waffle', price: 99, desc: 'Dark chocolate sauce', stock: true },
-  { id: 'w3', category: 'Waffles', name: 'Ice Cream Waffle', price: 119, desc: 'With vanilla ice cream', stock: true },
-  
-  { id: 'ts1', category: 'Thick Shakes', name: 'Chocolate Thick Milkshake', price: 149, desc: 'Rich chocolate shake', stock: true },
-  { id: 'ts2', category: 'Thick Shakes', name: 'Oreo Thick Milkshake', price: 149, desc: 'Crushed oreo shake', stock: true },
-  { id: 'ts3', category: 'Thick Shakes', name: 'Brownie Thick Milkshake', price: 169, desc: 'Blended with brownie chunks', stock: true },
-  
-  { id: 'bev1', category: 'Beverages', name: 'Hot Coffee', price: 29, desc: 'Classic hot coffee', stock: true },
-  { id: 'bev2', category: 'Beverages', name: 'Thick Cold Coffee', price: 79, desc: 'Blended cold coffee', stock: true },
-];
-
-const initialStock = [{ id: 'i1', name: 'Pizza Base', qty: 40, unit: 'pcs', min: 10 }, { id: 'i2', name: 'Burger Buns', qty: 30, unit: 'pcs', min: 10 }];
-const initialIceCream = [{ id: 'ic1', name: 'Vanilla', qty: 50, unit: 'scoops', min: 10 }, { id: 'ic2', name: 'Chocolate', qty: 30, unit: 'scoops', min: 10 }];
-const initialTables = Array.from({ length: 15 }, (_, i) => ({ id: `t${i + 1}`, name: `${i + 1}` }));
 
 /* ---------------- MAIN APP ---------------- */
 export default function App() {
@@ -132,13 +80,61 @@ export default function App() {
   const [table, setTable] = useState(urlTable);
   const [isAdminAuth, setIsAdminAuth] = useState(false);
 
-  const [menuItems, setMenuItems] = usePersist('menu', initialMenu);
-  const [activeOrders, setActiveOrders] = usePersist('orders', []);
-  const [orderHistory, setOrderHistory] = usePersist('history', []);
-  const [tables, setTables] = usePersist('tables', initialTables);
-  const [stockInv, setStockInv] = usePersist('stock', initialStock);
-  const [iceInv, setIceInv] = usePersist('icecream', initialIceCream);
-  const [cafeLogo, setCafeLogo] = usePersist('logo', '');
+  const [menuItems, setMenuItems] = useState([]);
+  const [activeOrders, setActiveOrders] = useState([]);
+  const [orderHistory, setOrderHistory] = useState([]);
+  const [tables, setTables] = useState([]);
+  const [stockInv, setStockInv] = useState([]);
+  const [iceInv, setIceInv] = useState([]);
+  const [cafeLogo, setCafeLogo] = useState('');
+
+  // Firestore Realtime Synchronization
+  useEffect(() => {
+    const unsubMenu = onSnapshot(collection(db, 'menu'), (snap) => {
+      if (snap.empty) {
+        // Seed default menu if empty
+        const defaultMenu = [
+          { id: 'p1', category: 'Pizza', name: 'Small Pizza', price: 139, desc: '6 inch regular crust', stock: true },
+          { id: 'p2', category: 'Pizza', name: 'Classic Margarita Pizza', price: 149, v: [['Regular', 149], ['Large', 189]], desc: 'Double cheese layer', stock: true }
+        ];
+        defaultMenu.forEach(item => setDoc(doc(db, 'menu', item.id), item));
+      } else {
+        setMenuItems(snap.docs.map(d => ({ ...d.data(), id: d.id })));
+      }
+    });
+
+    const unsubOrders = onSnapshot(collection(db, 'orders'), (snap) => {
+      setActiveOrders(snap.docs.map(d => ({ ...d.data(), id: d.id })));
+    });
+
+    const unsubHistory = onSnapshot(collection(db, 'history'), (snap) => {
+      setOrderHistory(snap.docs.map(d => ({ ...d.data(), id: d.id })));
+    });
+
+    const unsubTables = onSnapshot(collection(db, 'tables'), (snap) => {
+      if (snap.empty) {
+        Array.from({ length: 15 }, (_, i) => ({ id: `t${i + 1}`, name: `${i + 1}` })).forEach(t => setDoc(doc(db, 'tables', t.id), t));
+      } else {
+        setTables(snap.docs.map(d => ({ ...d.data(), id: d.id })));
+      }
+    });
+
+    const unsubStock = onSnapshot(collection(db, 'stock'), (snap) => {
+      setStockInv(snap.docs.map(d => ({ ...d.data(), id: d.id })));
+    });
+
+    const unsubIce = onSnapshot(collection(db, 'icecream'), (snap) => {
+      setIceInv(snap.docs.map(d => ({ ...d.data(), id: d.id })));
+    });
+
+    const unsubSettings = onSnapshot(doc(db, 'settings', 'config'), (snap) => {
+      if (snap.exists()) setCafeLogo(snap.data().logo || '');
+    });
+
+    return () => {
+      unsubMenu(); unsubOrders(); unsubHistory(); unsubTables(); unsubStock(); unsubIce(); unsubSettings();
+    };
+  }, []);
 
   // Enable audio on first interaction
   useEffect(() => {
@@ -147,20 +143,28 @@ export default function App() {
     return () => document.removeEventListener('click', unlock);
   }, []);
 
-  const placeOrder = (tbl, cart, total, payment) => {
-    const newOrder = { id: String(Date.now()).slice(-5), table: tbl, items: cart, total, payment, status: payment === 'Online' ? 'Verifying' : 'Pending', time: Date.now() };
-    setActiveOrders(p => [newOrder, ...p]);
+  const placeOrder = async (tbl, cart, total, payment) => {
+    const newOrder = { table: tbl, items: cart, total, payment, status: payment === 'Online' ? 'Verifying' : 'Pending', time: Date.now() };
+    await addDoc(collection(db, 'orders'), newOrder);
     playSfx('success');
   };
 
-  const completeOrder = (o) => { setOrderHistory(h => [{ ...o, status: 'Completed', completedAt: Date.now() }, ...h]); setActiveOrders(p => p.filter(x => x.id !== o.id)); playSfx('save'); };
-  const cancelOrder = (id) => { setActiveOrders(p => p.filter(x => x.id !== id)); playSfx('del'); };
+  const completeOrder = async (o) => {
+    await addDoc(collection(db, 'history'), { ...o, status: 'Completed', completedAt: Date.now() });
+    await deleteDoc(doc(db, 'orders', o.id));
+    playSfx('save');
+  };
+
+  const cancelOrder = async (id) => {
+    await deleteDoc(doc(db, 'orders', id));
+    playSfx('del');
+  };
 
   return (
     <div className="min-h-screen bg-purple-950 font-sans text-slate-100 selection:bg-purple-500">
       {mode === 'landing' && <LandingView tables={tables} logo={cafeLogo} onJoin={(t) => { setTable(t); setMode('customer'); }} onAdminLogin={() => { setIsAdminAuth(true); setMode('admin'); }} />}
       {mode === 'customer' && <CustomerView tableNumber={table} menuItems={menuItems} activeOrders={activeOrders} onPlaceOrder={placeOrder} onExit={urlTable ? null : () => setMode('landing')} />}
-      {mode === 'admin' && isAdminAuth && <AdminDashboard {...{ activeOrders, setActiveOrders, orderHistory, setOrderHistory, completeOrder, cancelOrder, menuItems, setMenuItems, tables, setTables, stockInv, setStockInv, iceInv, setIceInv, cafeLogo, setCafeLogo }} onExit={() => { setIsAdminAuth(false); setMode('landing'); }} />}
+      {mode === 'admin' && isAdminAuth && <AdminDashboard {...{ activeOrders, setActiveOrders, orderHistory, setOrderHistory, completeOrder, cancelOrder, menuItems, setMenuItems, tables, setTables, stockInv, setStockInv, iceInv, setIceInv, cafeLogo, setCafeLogo, db }} onExit={() => { setIsAdminAuth(false); setMode('landing'); }} />}
     </div>
   );
 }
@@ -277,7 +281,7 @@ function CustomerView({ tableNumber, menuItems, activeOrders, onPlaceOrder, onEx
           </div>
         )}
 
-        {checkout && (
+{checkout && (
           <div className="absolute inset-0 bg-purple-950/80 backdrop-blur-sm z-30 flex items-end">
             <div className="bg-white w-full rounded-t-[2.5rem] p-6 pb-8 shadow-2xl max-h-[90%] overflow-y-auto">
               <div className="flex justify-between items-center mb-5"><h3 className="text-2xl font-black text-slate-900">Your Order</h3><button onClick={() => { playSfx('click'); setCheckout(false); }} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200"><X className="w-5 h-5" /></button></div>
@@ -335,7 +339,14 @@ function AdminDashboard(p) {
     prevCount.current = p.activeOrders.length;
   }, [p.activeOrders]);
 
-  const updateStatus = (id, st) => { playSfx('click'); if (st === 'Completed') p.completeOrder(p.activeOrders.find(o => o.id === id)); else p.setActiveOrders(p.activeOrders.map(o => o.id === id ? { ...o, status: st } : o)); };
+  const updateStatus = async (id, st) => {
+    playSfx('click');
+    if (st === 'Completed') {
+      await p.completeOrder(p.activeOrders.find(o => o.id === id));
+    } else {
+      await updateDoc(doc(p.db, 'orders', id), { status: st });
+    }
+  };
   
   const [soundEnabled, setSoundEnabled] = useState(SOUND_ENABLED);
   const [voiceEnabled, setVoiceEnabled] = useState(VOICE_ENABLED);
@@ -369,11 +380,11 @@ function AdminDashboard(p) {
         </header>
         <div className="flex-1 overflow-y-auto p-4 md:p-6">
           {tab === 'orders' && <OrdersBoard orders={p.activeOrders} updateStatus={updateStatus} cancelOrder={p.cancelOrder} />}
-          {tab === 'menu' && <MenuTab menuItems={p.menuItems} setMenuItems={p.setMenuItems} />}
-          {tab === 'inventory' && <InventoryTab stockInv={p.stockInv} setStockInv={p.setStockInv} iceInv={p.iceInv} setIceInv={p.setIceInv} />}
+          {tab === 'menu' && <MenuTab menuItems={p.menuItems} db={p.db} />}
+          {tab === 'inventory' && <InventoryTab stockInv={p.stockInv} iceInv={p.iceInv} db={p.db} />}
           {tab === 'qr' && <QRTab logo={p.cafeLogo} />}
-          {tab === 'history' && <HistoryTab history={p.orderHistory} setHistory={p.setOrderHistory} />}
-          {tab === 'settings' && <SettingsTab logo={p.cafeLogo} setLogo={p.setCafeLogo} />}
+          {tab === 'history' && <HistoryTab history={p.orderHistory} db={p.db} />}
+          {tab === 'settings' && <SettingsTab logo={p.cafeLogo} db={p.db} />}
         </div>
       </main>
     </div>
@@ -420,12 +431,27 @@ function AdminCol({ title, icon, list, bg, text, action, color, onAction, onCanc
     </div>
   );
 }
-/* ---------------- MENU CRUD TAB (WITH DATALIST AUTOCOMPLETE) ---------------- */
-function MenuTab({ menuItems, setMenuItems }) {
+ /* ---------------- MENU CRUD TAB ---------------- */
+function MenuTab({ menuItems, db }) {
   const [edit, setEdit] = useState(undefined);
-  const save = (item) => { playSfx('save'); setMenuItems(edit ? menuItems.map(i => i.id === edit.id ? item : i) : [item, ...menuItems]); setEdit(undefined); };
-  
-  // Extract unique categories and descriptions for Auto-complete
+  const save = async (item) => {
+    playSfx('save');
+    if (edit && edit.id) {
+      await updateDoc(doc(db, 'menu', edit.id), item);
+    } else {
+      await setDoc(doc(db, 'menu', 'm' + Date.now()), item);
+    }
+    setEdit(undefined);
+  };
+  const toggleStock = async (it) => {
+    playSfx('click');
+    await updateDoc(doc(db, 'menu', it.id), { stock: !it.stock });
+  };
+  const deleteItem = async (id) => {
+    playSfx('del');
+    await deleteDoc(doc(db, 'menu', id));
+  };
+
   const categories = [...new Set(menuItems.map(i => i.category).filter(Boolean))];
   const descriptions = [...new Set(menuItems.map(i => i.desc).filter(Boolean))];
 
@@ -439,8 +465,8 @@ function MenuTab({ menuItems, setMenuItems }) {
             <td className="p-4 pl-6"><div className="w-12 h-12 bg-slate-200 rounded-xl overflow-hidden flex items-center justify-center">{it.img ? <img src={it.img} alt="" className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-slate-400" />}</div></td>
             <td className="p-4"><p className="font-bold text-slate-900">{it.name}</p><p className="text-xs text-slate-500">{it.category}</p></td>
             <td className="p-4 font-black text-purple-700">₹{it.v ? it.v.map(x => x[1]).join(' / ') : it.price}</td>
-            <td className="p-4"><button onClick={() => { playSfx('click'); setMenuItems(menuItems.map(i => i.id === it.id ? { ...i, stock: !i.stock } : i)); }} className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${it.stock ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{it.stock ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}{it.stock ? 'In Stock' : 'Out'}</button></td>
-            <td className="p-4 pr-6 text-right"><div className="flex justify-end gap-2"><button onClick={() => { playSfx('click'); setEdit(it); }} className="p-2 text-slate-400 hover:text-purple-700 bg-slate-50 rounded-xl"><Edit className="w-4 h-4" /></button><DelBtn onDel={() => { playSfx('del'); setMenuItems(menuItems.filter(i => i.id !== it.id)); }} /></div></td>
+            <td className="p-4"><button onClick={() => toggleStock(it)} className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${it.stock ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{it.stock ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}{it.stock ? 'In Stock' : 'Out'}</button></td>
+            <td className="p-4 pr-6 text-right"><div className="flex justify-end gap-2"><button onClick={() => { playSfx('click'); setEdit(it); }} className="p-2 text-slate-400 hover:text-purple-700 bg-slate-50 rounded-xl"><Edit className="w-4 h-4" /></button><DelBtn onDel={() => deleteItem(it.id)} /></div></td>
           </tr>
         ))}</tbody>
       </table></div>
@@ -455,7 +481,7 @@ function MenuForm({ item, categories, descriptions, onSave, onClose }) {
     const f = { get: (n) => box.current.querySelector(`[name="${n}"]`)?.value || '' };
     if (!f.get('name').trim() || !f.get('category').trim()) return playSfx('error');
     const vs = (f.get('v') || '').split(',').map(s => s.trim()).filter(Boolean).map(s => { const [l, p] = s.split(':'); return [l.trim(), Number(p)]; }).filter(x => x[0] && x[1]);
-    onSave({ id: item ? item.id : 'm' + Date.now(), name: f.get('name'), category: f.get('category'), desc: f.get('desc'), img, price: vs.length ? vs[0][1] : Number(f.get('price')), v: vs.length > 1 ? vs : null, stock: item ? item.stock : true });
+    onSave({ name: f.get('name'), category: f.get('category'), desc: f.get('desc'), img, price: vs.length ? vs[0][1] : Number(f.get('price')), v: vs.length > 1 ? vs : null, stock: item ? item.stock : true });
   };
   return (
     <Modal title={item ? 'Edit Item' : 'New Item'} onClose={onClose}>
@@ -486,8 +512,8 @@ function MenuForm({ item, categories, descriptions, onSave, onClose }) {
   );
 }
 
-/* ---------------- 2-SECTION INVENTORY TAB (WITH DATALIST AUTOCOMPLETE) ---------------- */
-function InventoryTab({ stockInv, setStockInv, iceInv, setIceInv }) {
+/* ---------------- INVENTORY TAB ---------------- */
+function InventoryTab({ stockInv, iceInv, db }) {
   const stockLows = stockInv.filter(i => i.qty <= i.min);
   const iceLows = iceInv.filter(i => i.qty <= i.min);
 
@@ -496,17 +522,32 @@ function InventoryTab({ stockInv, setStockInv, iceInv, setIceInv }) {
       {stockLows.length > 0 && <div className="bg-red-50 border border-red-200 text-red-800 rounded-2xl p-4 font-bold text-sm flex gap-2"><AlertTriangle className="w-5 h-5"/>{stockLows.map(l => `${l.name} is low`).join('. ')}</div>}
       {iceLows.length > 0 && <div className="bg-orange-50 border border-orange-200 text-orange-800 rounded-2xl p-4 font-bold text-sm flex gap-2"><AlertTriangle className="w-5 h-5"/>Ice Cream Low: {iceLows.map(l => l.name).join(', ')}</div>}
       
-      <InvSection title="Ice Cream Inventory" icon={<IceCream className="w-5 h-5"/>} items={iceInv} setItems={setIceInv} prefix="ic" />
-      <InvSection title="Stock Inventory" icon={<Package className="w-5 h-5"/>} items={stockInv} setItems={setStockInv} prefix="i" />
+      <InvSection title="Ice Cream Inventory" icon={<IceCream className="w-5 h-5"/>} items={iceInv} colName="icecream" db={db} prefix="ic" />
+      <InvSection title="Stock Inventory" icon={<Package className="w-5 h-5"/>} items={stockInv} colName="stock" db={db} prefix="i" />
     </div>
   );
 }
 
-function InvSection({ title, icon, items, setItems, prefix }) {
+function InvSection({ title, icon, items, colName, db, prefix }) {
   const [edit, setEdit] = useState(undefined); const box = useRef(null);
-  const upd = (id, d) => { playSfx(d > 0 ? 'add' : 'remove'); setItems(items.map(i => i.id === id ? { ...i, qty: Math.max(0, i.qty + d) } : i)); };
-  const save = () => { const f = { get: (n) => box.current.querySelector(`[name="${n}"]`)?.value || '' }; if (!f.get('name')) return playSfx('error'); setItems(edit ? items.map(i => i.id === edit.id ? { ...i, name: f.get('name'), qty: Number(f.get('qty')), min: Number(f.get('min')), unit: f.get('unit') } : i) : [...items, { id: prefix + Date.now(), name: f.get('name'), qty: Number(f.get('qty')), min: Number(f.get('min')), unit: f.get('unit') }]); playSfx('save'); setEdit(undefined); };
-  
+  const upd = async (id, qty, d) => {
+    playSfx(d > 0 ? 'add' : 'remove');
+    await updateDoc(doc(db, colName, id), { qty: Math.max(0, qty + d) });
+  };
+  const save = async () => {
+    const f = { get: (n) => box.current.querySelector(`[name="${n}"]`)?.value || '' };
+    if (!f.get('name')) return playSfx('error');
+    playSfx('save');
+    const data = { name: f.get('name'), qty: Number(f.get('qty')), min: Number(f.get('min')), unit: f.get('unit') };
+    if (edit && edit.id) {
+      await updateDoc(doc(db, colName, edit.id), data);
+    } else {
+      await setDoc(doc(db, colName, prefix + Date.now()), data);
+    }
+    setEdit(undefined);
+  };
+  const deleteInv = async (id) => { playSfx('del'); await deleteDoc(doc(db, colName, id)); };
+
   const names = [...new Set(items.map(i => i.name).filter(Boolean))];
   const units = [...new Set(items.map(i => i.unit).filter(Boolean))];
   
@@ -517,9 +558,9 @@ function InvSection({ title, icon, items, setItems, prefix }) {
         <tbody className="divide-y divide-slate-100">{items.map(i => (
           <tr key={i.id} className={i.qty <= i.min ? 'bg-red-50/60' : ''}>
             <td className="p-4 pl-6 font-bold">{i.name}</td>
-            <td className="p-4"><div className="flex items-center gap-2"><button onClick={() => upd(i.id, -1)} className="p-1.5 bg-slate-100 rounded-lg"><Minus className="w-4 h-4"/></button><span className="font-black w-20 text-center">{i.qty} {i.unit}</span><button onClick={() => upd(i.id, 1)} className="p-1.5 bg-slate-100 rounded-lg"><Plus className="w-4 h-4"/></button></div></td>
+            <td className="p-4"><div className="flex items-center gap-2"><button onClick={() => upd(i.id, i.qty, -1)} className="p-1.5 bg-slate-100 rounded-lg"><Minus className="w-4 h-4"/></button><span className="font-black w-20 text-center">{i.qty} {i.unit}</span><button onClick={() => upd(i.id, i.qty, 1)} className="p-1.5 bg-slate-100 rounded-lg"><Plus className="w-4 h-4"/></button></div></td>
             <td className="p-4 font-bold text-slate-500">{i.min}</td>
-            <td className="p-4 pr-6 text-right"><button onClick={() => { playSfx('click'); setEdit(i); }} className="p-2 text-slate-400 bg-slate-50 rounded-xl mr-2"><Edit className="w-4 h-4"/></button><DelBtn onDel={() => { playSfx('del'); setItems(items.filter(x => x.id !== i.id)); }} /></td>
+            <td className="p-4 pr-6 text-right"><button onClick={() => { playSfx('click'); setEdit(i); }} className="p-2 text-slate-400 bg-slate-50 rounded-xl mr-2"><Edit className="w-4 h-4"/></button><DelBtn onDel={() => deleteInv(i.id)} /></td>
           </tr>
         ))}
         {items.length === 0 && <tr><td colSpan="4" className="p-8 text-center font-bold text-slate-400">Empty List</td></tr>}
@@ -549,7 +590,6 @@ function InvSection({ title, icon, items, setItems, prefix }) {
     </div>
   );
 }
-
 /* ---------------- EXACT LAYOUT QR GENERATOR ---------------- */
 function QRTab({ logo }) {
   const [link, setLink] = useState('');
@@ -568,7 +608,6 @@ function QRTab({ logo }) {
     const qrImage = getQrUrl(cardData.link);
     const logoImg = logo || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23d8b4fe" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2M14 2v2M6 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1z"/><path d="M17 11h1a3 3 0 0 1 0 6h-1"/></svg>';
     
-    // HTML replicating the purple curved card
     const html = `
       <div style="width:340px; margin:20px auto; background:#fff; border-radius:36px; overflow:hidden; box-shadow:0 10px 30px rgba(0,0,0,0.1); font-family:sans-serif; text-align:center; padding-bottom:30px;">
         <div style="background:#7e22ce; color:#fff; padding:30px 20px 80px; border-radius: 0 0 40px 40px;">
@@ -617,17 +656,22 @@ function QRTab({ logo }) {
     </div>
   );
 }
+
 /* ---------------- HISTORY & REVENUE TAB ---------------- */
-function HistoryTab({ history, setHistory }) {
+function HistoryTab({ history, db }) {
   const [from, setFrom] = useState(''); const [to, setTo] = useState('');
   const rows = useMemo(() => history.filter(o => { const d = new Date(o.completedAt || o.time); const ymdStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); return (!from || ymdStr >= from) && (!to || ymdStr <= to); }), [history, from, to]);
   const rev = rows.reduce((s, o) => s + o.total, 0); const onl = rows.filter(o => o.payment === 'Online').reduce((s, o) => s + o.total, 0);
   
+  const deleteHistory = async (id) => { playSfx('del'); await deleteDoc(doc(db, 'history', id)); };
+
   const dlCsv = () => {
     playSfx('save');
     let c = 'ID,Table,Date,Time,Payment,Total,Items\n' + rows.map(o => { const d = new Date(o.completedAt || o.time); return `${o.id},${o.table},${d.toLocaleDateString()},${d.toLocaleTimeString()},${o.payment},${o.total},"${o.items.map(i => `${i.qty}x${i.name}`).join('; ')}"`; }).join('\n');
-    c += `\n,,,,TOTAL,${rev},`; download(`revenue_${from || 'all'}_${to || 'all'}.csv`, c);
+    c += `\n,,,,TOTAL,${rev},`;
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([c], { type: 'text/csv' })); a.download = `revenue_${from || 'all'}_${to || 'all'}.csv`; a.click();
   };
+
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-3xl border border-slate-200 p-5 flex flex-wrap gap-4 items-end">
@@ -649,7 +693,7 @@ function HistoryTab({ history, setHistory }) {
             <td className="p-4"><p className="font-bold">{o.table}</p><p className="text-xs text-slate-500 truncate max-w-[200px]">{o.items.map(i => `${i.qty}x ${i.name}`).join(', ')}</p></td>
             <td className="p-4"><span className={`px-2 py-1 rounded-md text-xs font-bold ${o.payment === 'Online' ? 'bg-indigo-50 text-indigo-700' : 'bg-amber-50 text-amber-700'}`}>{o.payment}</span></td>
             <td className="p-4 font-black text-purple-700 text-right text-lg">₹{o.total}</td>
-            <td className="p-4 pr-6 text-right"><DelBtn onDel={() => { playSfx('del'); setHistory(history.filter(x => x.id !== o.id)); }} /></td>
+            <td className="p-4 pr-6 text-right"><DelBtn onDel={() => deleteHistory(o.id)} /></td>
           </tr>
         ))}
         {rows.length === 0 && <tr><td colSpan="6" className="p-10 text-center font-bold text-slate-400">No history found.</td></tr>}
@@ -660,8 +704,12 @@ function HistoryTab({ history, setHistory }) {
 }
 
 /* ---------------- SETTINGS TAB (LOGO UPLOAD) ---------------- */
-function SettingsTab({ logo, setLogo }) {
+function SettingsTab({ logo, db }) {
   const fileRef = useRef(null);
+  const saveLogo = async (url) => {
+    playSfx('save');
+    await setDoc(doc(db, 'settings', 'config'), { logo: url });
+  };
   return (
     <div className="bg-white rounded-3xl border border-slate-200 p-8 max-w-xl">
       <h2 className="text-2xl font-black text-slate-900 mb-6">Café Settings</h2>
@@ -669,9 +717,9 @@ function SettingsTab({ logo, setLogo }) {
         <div className="w-32 h-32 bg-white rounded-full shadow-lg flex items-center justify-center overflow-hidden mb-5 border-4 border-purple-100">
           {logo ? <img src={logo} alt="Logo" className="w-full h-full object-cover"/> : <Coffee className="w-12 h-12 text-purple-300" />}
         </div>
-        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={async (e) => { if (e.target.files[0]) { playSfx('save'); setLogo(await readImg(e.target.files[0])); } }} />
+        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={async (e) => { if (e.target.files[0]) saveLogo(await readImg(e.target.files[0])); }} />
         <button onClick={() => { playSfx('click'); fileRef.current.click(); }} className="bg-purple-700 hover:bg-purple-800 text-white font-bold px-6 py-3 rounded-xl flex items-center gap-2 shadow-md"><Upload className="w-5 h-5"/> Upload Logo</button>
-        {logo && <button onClick={() => { playSfx('del'); setLogo(''); }} className="text-red-500 font-bold text-sm mt-4 hover:underline">Remove Logo</button>}
+        {logo && <button onClick={() => saveLogo('')} className="text-red-500 font-bold text-sm mt-4 hover:underline">Remove Logo</button>}
         <p className="text-xs text-slate-400 text-center mt-4 max-w-xs">Upload a circular logo for the landing page wheel and printed QR cards.</p>
       </div>
     </div>
