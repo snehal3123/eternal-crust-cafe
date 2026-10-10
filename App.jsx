@@ -1,0 +1,679 @@
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import {
+  Coffee, Utensils, Plus, Minus, ChevronLeft, LayoutDashboard, LogOut,
+  CheckCircle, Clock, ChefHat, Bell, Edit, Trash2, ToggleLeft, ToggleRight, QrCode, Printer,
+  CreditCard, Banknote, X, History, Download, Image as ImageIcon, Package, AlertTriangle, Upload, IceCream, Lock, Eye, EyeOff, Settings, Volume2, VolumeX, Mic
+} from 'lucide-react';
+
+/* ---------------- AUDIO & VOICE ENGINE ---------------- */
+let AC = null;
+let SOUND_ENABLED = true;
+let VOICE_ENABLED = true;
+
+const SFX = {
+  click: [[900, 0, 0.03, 'square', 0.03]],
+  add: [[600, 0, 0.07], [900, 0.07, 0.1]],
+  remove: [[500, 0, 0.07], [300, 0.07, 0.1]],
+  success: [[523, 0, 0.12], [659, 0.12, 0.12], [784, 0.24, 0.12], [1047, 0.36, 0.35]],
+  save: [[700, 0, 0.08], [1000, 0.08, 0.15]],
+  del: [[400, 0, 0.1, 'triangle'], [250, 0.1, 0.2, 'triangle']],
+  error: [[200, 0, 0.3, 'sawtooth', 0.08]],
+  ring: [[880, 0, 1.5, 'sine', 0.16], [2434, 0, 0.9, 'sine', 0.07], [880, 0.45, 1.5, 'sine', 0.16], [2434, 0.45, 0.9, 'sine', 0.07]],
+};
+
+const playSfx = (name) => {
+  if (!SOUND_ENABLED) return;
+  try {
+    AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+    if (AC.state === 'suspended') AC.resume();
+    (SFX[name] || []).forEach(([f, t, d, type = 'sine', v = 0.1]) => {
+      const o = AC.createOscillator(), g = AC.createGain(), s = AC.currentTime + t;
+      o.type = type; o.frequency.value = f;
+      g.gain.setValueAtTime(v, s); g.gain.exponentialRampToValueAtTime(0.0001, s + d);
+      o.connect(g); g.connect(AC.destination); o.start(s); o.stop(s + d + 0.02);
+    });
+  } catch (e) { /* ignore */ }
+};
+
+const speak = (txt) => {
+  if (!VOICE_ENABLED || !window.speechSynthesis) return;
+  const u = new SpeechSynthesisUtterance(txt);
+  const voices = window.speechSynthesis.getVoices();
+  const femaleVoice = voices.find(v => /(female|samantha|zira|google us english|heera|veena)/i.test(v.name));
+  if (femaleVoice) u.voice = femaleVoice;
+  u.pitch = 1.1; u.rate = 0.95; u.volume = 1;
+  window.speechSynthesis.speak(u);
+};
+
+/* ---------------- CONFIG & DATA ---------------- */
+const UPI_ID = 'snehaltitkare58-2@okicici';
+const CAFE_NAME = 'ETERNAL CRUST CAFÉ';
+
+const getQrUrl = (url) => `https://api.qrserver.com/v1/create-qr-code/?size=400x400&margin=10&color=6b21a8&data=${encodeURIComponent(url)}`;
+
+function usePersist(key, init) {
+  const [v, setV] = useState(() => { try { const s = localStorage.getItem('ec_' + key); return s ? JSON.parse(s) : init; } catch { return init; } });
+  useEffect(() => { try { localStorage.setItem('ec_' + key, JSON.stringify(v)); } catch (e) {} }, [v, key]);
+  return [v, setV];
+}
+
+const readImg = (f) => new Promise((res) => {
+  const r = new FileReader(); r.onload = () => { const im = new Image(); im.onload = () => { const c = document.createElement('canvas'); const s = Math.min(1, 600 / Math.max(im.width, im.height)); c.width = im.width * s; c.height = im.height * s; c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); res(c.toDataURL('image/jpeg', 0.8)); }; im.src = r.result; }; r.readAsDataURL(f);
+});
+
+// Initial Huge Menu Data
+const initialMenu = [
+  { id: 'p1', category: 'Pizza', name: 'Small Pizza', price: 139, desc: '6 inch regular crust', stock: true },
+  { id: 'p2', category: 'Pizza', name: 'Classic Margarita Pizza', price: 149, v: [['Regular', 149], ['Large', 189]], desc: 'Double cheese layer', stock: true },
+  { id: 'p3', category: 'Pizza', name: 'Paneer Mushroom Pizza', price: 169, v: [['Regular', 169], ['Large', 189]], desc: 'Fresh paneer & mushrooms', stock: true },
+  { id: 'p4', category: 'Pizza', name: 'Cheese Chilli Pizza', price: 169, v: [['Regular', 169], ['Large', 199]], desc: 'Spicy chili flakes with mozzarella', stock: true },
+  { id: 'p5', category: 'Pizza', name: 'Hot Garlic Pizza', price: 169, v: [['Regular', 169], ['Large', 199]], desc: 'Roasted garlic & spices', stock: true },
+  { id: 'p6', category: 'Pizza', name: 'Vegetable Delight Pizza', price: 179, v: [['Regular', 179], ['Large', 209]], desc: 'Loaded with fresh veggies', stock: true },
+  { id: 'p7', category: 'Pizza', name: 'Veg Crispy Corn Pizza', price: 179, v: [['Regular', 179], ['Large', 209]], desc: 'Sweet corn & capsicum', stock: true },
+  { id: 'p8', category: 'Pizza', name: 'Tandoori Paneer Tikka Pizza', price: 199, v: [['Regular', 199], ['Large', 229]], desc: 'Tandoori sauce base', stock: true },
+  { id: 'p9', category: 'Pizza', name: 'Paneer Makhani Pizza', price: 199, v: [['Regular', 199], ['Large', 229]], desc: 'Makhani gravy base', stock: true },
+  { id: 'p10', category: 'Pizza', name: 'Vegetable Tandoor Pizza', price: 199, v: [['Regular', 199], ['Large', 219]], desc: 'Tandoori flavored veggies', stock: true },
+  { id: 'p11', category: 'Pizza', name: 'BBQ Paneer Pizza', price: 209, v: [['Regular', 209], ['Large', 239]], desc: 'Barbeque sauce base', stock: true },
+  { id: 'p12', category: 'Pizza', name: 'Eternal Crust Special Pizza', price: 219, v: [['Regular', 219], ['Large', 249]], desc: 'Chef\'s special loaded pizza', stock: true },
+  
+  { id: 'gb1', category: 'Garlic Bread', name: 'Classic Garlic Bread', price: 99, desc: 'Freshly baked', stock: true },
+  { id: 'gb2', category: 'Garlic Bread', name: 'Cheese Chilli Garlic Bread', price: 109, desc: 'With mozzarella & chili', stock: true },
+  { id: 'gb3', category: 'Garlic Bread', name: 'Cheese Corn Garlic Bread', price: 109, desc: 'With sweet corn', stock: true },
+  
+  { id: 'pa1', category: 'Pasta', name: 'Penne Arrabiata Pasta', price: 139, desc: 'Red sauce spicy pasta', stock: true },
+  { id: 'pa2', category: 'Pasta', name: 'Alfredo Pasta', price: 139, desc: 'White sauce creamy pasta', stock: true },
+  { id: 'pa3', category: 'Pasta', name: 'Mamma Rosa Pasta', price: 139, desc: 'Pink sauce pasta', stock: true },
+  { id: 'pa4', category: 'Pasta', name: 'Spaghetti Aglio Olio', price: 139, desc: 'Olive oil & garlic', stock: true },
+  { id: 'pa5', category: 'Pasta', name: 'Mushroom Pasta', price: 169, desc: 'Creamy mushroom sauce', stock: true },
+  { id: 'pa6', category: 'Pasta', name: 'Paneer Tikka Pasta', price: 169, desc: 'Indian fusion pasta', stock: true },
+  
+  { id: 'f1', category: 'Fries', name: 'Classic Fries', price: 79, desc: 'Salted french fries', stock: true },
+  { id: 'f2', category: 'Fries', name: 'Peri Peri Fries', price: 89, desc: 'Spicy peri peri mix', stock: true },
+  { id: 'f3', category: 'Fries', name: 'Schezwan French Fries', price: 99, desc: 'Tossed in schezwan sauce', stock: true },
+  { id: 'f4', category: 'Fries', name: 'Chilli Garlic Fries', price: 109, desc: 'Spicy chili garlic toss', stock: true },
+  { id: 'f5', category: 'Fries', name: 'Cheese Loaded Fries', price: 119, desc: 'Topped with liquid cheese', stock: true },
+
+  { id: 's1', category: 'Sandwich', name: 'Vegetable Sandwich', price: 69, desc: 'Plain veg sandwich', stock: true },
+  { id: 's2', category: 'Sandwich', name: 'Russian Salad Sandwich', price: 79, desc: 'Creamy veg salad filling', stock: true },
+  { id: 's3', category: 'Sandwich', name: 'Mumbai Club Sandwich', price: 89, desc: '3 layer club sandwich', stock: true },
+  { id: 's4', category: 'Sandwich', name: 'Vegetable Grill Sandwich', price: 89, desc: 'Grilled veg sandwich', stock: true },
+  { id: 's5', category: 'Sandwich', name: 'Vegetable Cheese Grill', price: 109, desc: 'Grilled with cheese', stock: true },
+  { id: 's6', category: 'Sandwich', name: 'Chilli Cheese Onion Club Grill', price: 119, desc: 'Spicy onion cheese filling', stock: true },
+  { id: 's7', category: 'Sandwich', name: 'Paneer Tikka Grill', price: 149, desc: 'Paneer tikka stuffing', stock: true },
+  { id: 's8', category: 'Sandwich', name: 'Mushroom Cheese Grill', price: 149, desc: 'Mushroom & cheese stuffing', stock: true },
+
+  { id: 'b1', category: 'Burger', name: 'Vegetable Burger', price: 89, desc: 'Aloo tikki burger', stock: true },
+  { id: 'b2', category: 'Burger', name: 'Vegetable Cheese Burger', price: 109, desc: 'Veg patty with cheese slice', stock: true },
+  { id: 'b3', category: 'Burger', name: 'Paneer Tikka Crispy Burger', price: 149, desc: 'Crispy paneer patty', stock: true },
+  { id: 'b4', category: 'Burger', name: 'Cheese Burst Burger', price: 179, desc: 'Liquid cheese filled patty', stock: true },
+  { id: 'b5', category: 'Burger', name: 'Maharaja Burger', price: 189, desc: 'Double patty giant burger', stock: true },
+  
+  { id: 'w1', category: 'Waffles', name: 'Classic Waffle', price: 89, desc: 'Maple syrup / Honey', stock: true },
+  { id: 'w2', category: 'Waffles', name: 'Chocolate Waffle', price: 99, desc: 'Dark chocolate sauce', stock: true },
+  { id: 'w3', category: 'Waffles', name: 'Ice Cream Waffle', price: 119, desc: 'With vanilla ice cream', stock: true },
+  
+  { id: 'ts1', category: 'Thick Shakes', name: 'Chocolate Thick Milkshake', price: 149, desc: 'Rich chocolate shake', stock: true },
+  { id: 'ts2', category: 'Thick Shakes', name: 'Oreo Thick Milkshake', price: 149, desc: 'Crushed oreo shake', stock: true },
+  { id: 'ts3', category: 'Thick Shakes', name: 'Brownie Thick Milkshake', price: 169, desc: 'Blended with brownie chunks', stock: true },
+  
+  { id: 'bev1', category: 'Beverages', name: 'Hot Coffee', price: 29, desc: 'Classic hot coffee', stock: true },
+  { id: 'bev2', category: 'Beverages', name: 'Thick Cold Coffee', price: 79, desc: 'Blended cold coffee', stock: true },
+];
+
+const initialStock = [{ id: 'i1', name: 'Pizza Base', qty: 40, unit: 'pcs', min: 10 }, { id: 'i2', name: 'Burger Buns', qty: 30, unit: 'pcs', min: 10 }];
+const initialIceCream = [{ id: 'ic1', name: 'Vanilla', qty: 50, unit: 'scoops', min: 10 }, { id: 'ic2', name: 'Chocolate', qty: 30, unit: 'scoops', min: 10 }];
+const initialTables = Array.from({ length: 15 }, (_, i) => ({ id: `t${i + 1}`, name: `${i + 1}` }));
+
+/* ---------------- MAIN APP ---------------- */
+export default function App() {
+  const qs = new URLSearchParams(window.location.search);
+  const urlTable = qs.get('table');
+  const [mode, setMode] = useState(urlTable ? 'customer' : 'landing');
+  const [table, setTable] = useState(urlTable);
+  const [isAdminAuth, setIsAdminAuth] = useState(false);
+
+  const [menuItems, setMenuItems] = usePersist('menu', initialMenu);
+  const [activeOrders, setActiveOrders] = usePersist('orders', []);
+  const [orderHistory, setOrderHistory] = usePersist('history', []);
+  const [tables, setTables] = usePersist('tables', initialTables);
+  const [stockInv, setStockInv] = usePersist('stock', initialStock);
+  const [iceInv, setIceInv] = usePersist('icecream', initialIceCream);
+  const [cafeLogo, setCafeLogo] = usePersist('logo', '');
+
+  // Enable audio on first interaction
+  useEffect(() => {
+    const unlock = () => { playSfx('click'); document.removeEventListener('click', unlock); };
+    document.addEventListener('click', unlock);
+    return () => document.removeEventListener('click', unlock);
+  }, []);
+
+  const placeOrder = (tbl, cart, total, payment) => {
+    const newOrder = { id: String(Date.now()).slice(-5), table: tbl, items: cart, total, payment, status: payment === 'Online' ? 'Verifying' : 'Pending', time: Date.now() };
+    setActiveOrders(p => [newOrder, ...p]);
+    playSfx('success');
+  };
+
+  const completeOrder = (o) => { setOrderHistory(h => [{ ...o, status: 'Completed', completedAt: Date.now() }, ...h]); setActiveOrders(p => p.filter(x => x.id !== o.id)); playSfx('save'); };
+  const cancelOrder = (id) => { setActiveOrders(p => p.filter(x => x.id !== id)); playSfx('del'); };
+
+  return (
+    <div className="min-h-screen bg-purple-950 font-sans text-slate-100 selection:bg-purple-500">
+      {mode === 'landing' && <LandingView tables={tables} logo={cafeLogo} onJoin={(t) => { setTable(t); setMode('customer'); }} onAdminLogin={() => { setIsAdminAuth(true); setMode('admin'); }} />}
+      {mode === 'customer' && <CustomerView tableNumber={table} menuItems={menuItems} activeOrders={activeOrders} onPlaceOrder={placeOrder} onExit={urlTable ? null : () => setMode('landing')} />}
+      {mode === 'admin' && isAdminAuth && <AdminDashboard {...{ activeOrders, setActiveOrders, orderHistory, setOrderHistory, completeOrder, cancelOrder, menuItems, setMenuItems, tables, setTables, stockInv, setStockInv, iceInv, setIceInv, cafeLogo, setCafeLogo }} onExit={() => { setIsAdminAuth(false); setMode('landing'); }} />}
+    </div>
+  );
+}
+
+/* ---------------- SHARED COMPONENTS ---------------- */
+const inpStyle = 'w-full border-2 border-slate-200 rounded-xl px-4 py-3 focus:border-purple-600 outline-none font-bold text-slate-900';
+function Modal({ title, onClose, children }) {
+  return (
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white text-slate-800 rounded-[2rem] p-7 w-full max-w-md shadow-2xl max-h-[92vh] overflow-y-auto relative">
+        <div className="flex justify-between items-center mb-5"><h3 className="text-2xl font-black">{title}</h3><button onClick={() => { playSfx('click'); onClose(); }} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200"><X className="w-5 h-5" /></button></div>
+        {children}
+      </div>
+    </div>
+  );
+}
+function DelBtn({ onDel }) {
+  const [a, setA] = useState(false);
+  useEffect(() => { if (a) { const t = setTimeout(() => setA(false), 3000); return () => clearTimeout(t); } }, [a]);
+  return <button onClick={() => { playSfx('click'); if (a) onDel(); else setA(true); }} className={`p-2 rounded-xl transition-colors text-xs font-black ${a ? 'bg-red-600 text-white' : 'bg-slate-50 text-slate-400 hover:text-red-600 hover:bg-red-50'}`}>{a ? 'Sure?' : <Trash2 className="w-4 h-4" />}</button>;
+}
+
+/* ---------------- LANDING VIEW (CENTER WHEEL + LOGO) ---------------- */
+function LandingView({ tables, logo, onJoin, onAdminLogin }) {
+  const [showLogin, setShowLogin] = useState(false);
+  const [wi, setWi] = useState(0);
+
+  return (
+    <div className="relative min-h-screen flex flex-col overflow-hidden bg-gradient-to-b from-purple-950 via-purple-900 to-indigo-950" onWheel={(e) => setWi(p => e.deltaY > 0 ? Math.min(p + 1, tables.length - 1) : Math.max(p - 1, 0))}>
+      <div className="absolute top-6 right-6 z-50"><button onClick={() => { playSfx('click'); setShowLogin(true); }} className="p-3 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full text-white"><Lock className="w-5 h-5" /></button></div>
+      
+      <div className="flex-1 flex flex-col items-center justify-center p-6 w-full max-w-4xl mx-auto">
+        <div className="flex flex-col items-center text-center z-10 mb-10 w-full">
+          <div className="w-28 h-28 bg-purple-800/50 rounded-full shadow-[0_0_40px_rgba(168,85,247,0.4)] mb-6 backdrop-blur-sm border-4 border-purple-400/50 overflow-hidden flex items-center justify-center shrink-0">
+            {logo ? <img src={logo} alt="Logo" className="w-full h-full object-cover" /> : <Coffee className="w-12 h-12 text-purple-200" />}
+          </div>
+          <h1 className="text-4xl md:text-6xl font-black text-white mb-2 tracking-tight drop-shadow-lg">{CAFE_NAME}</h1>
+          <p className="text-purple-300 text-lg font-medium tracking-wide">Good food travels better.</p>
+        </div>
+
+        <div className="relative flex flex-col items-center justify-center bg-white/5 backdrop-blur-md p-8 rounded-[3rem] border border-white/10 shadow-2xl">
+          <div className="text-sm font-black uppercase tracking-widest text-purple-300 mb-6">Select Your Table</div>
+          <div className="flex items-center gap-6 mb-8">
+            <button onClick={() => { playSfx('click'); setWi(p => Math.max(p - 1, 0)); }} className="p-4 bg-purple-800/80 rounded-full hover:bg-purple-700 shadow-lg text-white"><Minus className="w-6 h-6" /></button>
+            <div className="w-32 h-32 bg-white text-purple-950 rounded-full flex items-center justify-center text-6xl font-black shadow-[0_0_50px_rgba(255,255,255,0.2)] border-8 border-purple-400/50 z-20 transition-all">
+              {tables[wi]?.name || '1'}
+            </div>
+            <button onClick={() => { playSfx('click'); setWi(p => Math.min(p + 1, tables.length - 1)); }} className="p-4 bg-purple-800/80 rounded-full hover:bg-purple-700 shadow-lg text-white"><Plus className="w-6 h-6" /></button>
+          </div>
+          <button onClick={() => { playSfx('click'); onJoin(tables[wi]?.name || '1'); }} className="w-64 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-xl py-4 rounded-full shadow-[0_10px_30px_rgba(147,51,234,0.4)] active:scale-95 transition-all">
+            JOIN TABLE
+          </button>
+        </div>
+      </div>
+      {showLogin && <AdminLoginModal onClose={() => setShowLogin(false)} onSuccess={onAdminLogin} />}
+    </div>
+  );
+}
+
+function AdminLoginModal({ onClose, onSuccess }) {
+  const [u, setU] = useState(''); const [p, setP] = useState(''); const [sp, setSp] = useState(false); const [err, setErr] = useState('');
+  return (
+    <Modal title="Admin Access" onClose={onClose}>
+      <form onSubmit={(e) => { e.preventDefault(); if (u === 'Eternalcrust2026' && p === 'Eternalcrust2026@forever') { playSfx('success'); onSuccess(); } else { playSfx('error'); setErr('Invalid credentials'); } }} className="space-y-4">
+        {err && <div className="bg-red-50 text-red-600 p-3 rounded-xl text-sm font-bold text-center">{err}</div>}
+        <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Username</label><input value={u} onChange={e => setU(e.target.value)} className={inpStyle} /></div>
+        <div className="relative"><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Password</label><input type={sp ? 'text' : 'password'} value={p} onChange={e => setP(e.target.value)} className={inpStyle} /><button type="button" onClick={() => setSp(!sp)} className="absolute right-4 top-[34px] text-slate-400">{sp ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}</button></div>
+        <button type="submit" className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-4 rounded-xl mt-2">Login</button>
+      </form>
+    </Modal>
+  );
+}
+
+/* ---------------- CUSTOMER VIEW ---------------- */
+function CustomerView({ tableNumber, menuItems, activeOrders, onPlaceOrder, onExit }) {
+  const [cart, setCart] = useState([]); const [checkout, setCheckout] = useState(false);
+  const cats = [...new Set(menuItems.map(i => i.category))]; const [activeCat, setActiveCat] = useState(cats[0]);
+  const total = cart.reduce((s, c) => s + c.price * c.qty, 0); const count = cart.reduce((s, c) => s + c.qty, 0);
+  const verifying = activeOrders.find(o => o.table === tableNumber && o.status === 'Verifying');
+  const accepted = activeOrders.find(o => o.table === tableNumber && ['Pending', 'Preparing', 'Ready'].includes(o.status));
+
+  const add = (item, vi) => { playSfx('add'); const nm = item.name + (item.v ? ` (${item.v[vi][0]})` : ''); const pr = item.v ? item.v[vi][1] : item.price; const k = item.id + vi; setCart(p => p.find(c => c.key === k) ? p.map(c => c.key === k ? { ...c, qty: c.qty + 1 } : c) : [...p, { key: k, name: nm, price: pr, qty: 1 }]); };
+  const chg = (k, d) => { playSfx(d > 0 ? 'add' : 'remove'); setCart(p => p.map(c => c.key === k ? { ...c, qty: c.qty + d } : c).filter(c => c.qty > 0)); };
+
+  return (
+    <div className="bg-purple-950 fixed inset-0 flex justify-center overflow-hidden">
+      <div className="bg-slate-50 w-full max-w-md mx-auto sm:rounded-[2.5rem] sm:shadow-2xl overflow-hidden flex flex-col h-full relative text-slate-800">
+        <header className="bg-purple-900 px-4 pt-4 pb-3 text-white shadow-md z-10 shrink-0">
+          <div className="flex items-center justify-between mb-3">{onExit ? <button onClick={() => { playSfx('click'); onExit(); }} className="p-2 -ml-2 bg-purple-800 rounded-full"><ChevronLeft className="w-5 h-5" /></button> : <div className="w-9 h-9" />}<div className="bg-purple-950/50 px-4 py-1.5 rounded-full border border-purple-700/50"><h1 className="text-sm font-black tracking-widest uppercase text-purple-200">Table {tableNumber}</h1></div><div className="w-9 h-9" /></div>
+          <div className="flex overflow-x-auto gap-2 pb-2 scrollbar-hide">{cats.map(c => <button key={c} onClick={() => { playSfx('click'); setActiveCat(c); }} className={`whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-bold shrink-0 transition-colors ${activeCat === c ? 'bg-white text-purple-900 shadow-md' : 'bg-purple-800/80 text-purple-200'}`}>{c}</button>)}</div>
+        </header>
+
+        <main className="flex-1 overflow-y-auto p-4 bg-slate-100">
+          {verifying && <PaymentTimer order={verifying} />}
+          {accepted && !verifying && <div className="bg-green-100 border-l-4 border-green-500 text-green-900 p-4 rounded-2xl mb-5 flex items-center gap-4"><CheckCircle className="w-8 h-8 text-green-600 shrink-0" /><div><p className="font-bold text-lg">Order Accepted!</p><p className="text-sm opacity-80">Kitchen is preparing your meal.</p></div></div>}
+          <div className="space-y-3 pb-24">
+            {menuItems.filter(i => i.category === activeCat && i.stock).map(it => (
+              <div key={it.id} className="bg-white p-3 rounded-2xl shadow-sm border border-slate-200 flex gap-3">
+                <div className="w-20 h-20 bg-slate-100 rounded-xl overflow-hidden shrink-0 flex items-center justify-center">{it.img ? <img src={it.img} alt="" className="w-full h-full object-cover" /> : <ImageIcon className="w-8 h-8 text-slate-300" />}</div>
+                <div className="flex-1 flex flex-col justify-between py-1">
+                  <div><h3 className="font-black text-slate-900 leading-tight">{it.name}</h3>
+                  {it.desc && <p className="text-[11px] text-slate-500 font-medium leading-tight mt-0.5">{it.desc}</p>}
+                  {it.v && <div className="flex flex-wrap gap-1 mt-1">{it.v.map((x, i) => <button key={i} onClick={() => add(it, i)} className="px-2 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg text-[10px] font-bold border border-purple-100 active:scale-95">{x[0]} ₹{x[1]}</button>)}</div>}</div>
+                  {!it.v && <div className="flex justify-between items-end mt-1"><span className="font-black text-purple-700 text-lg">₹{it.price}</span><button onClick={() => add(it, 0)} className="bg-purple-100 text-purple-800 px-4 py-1.5 rounded-xl text-xs font-bold active:scale-95 hover:bg-purple-200">Add +</button></div>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </main>
+
+        {count > 0 && !checkout && (
+          <div className="absolute bottom-0 left-0 right-0 bg-white px-4 pt-3 pb-6 shadow-[0_-10px_30px_-10px_rgba(88,28,135,0.3)] rounded-t-[1.5rem] z-20">
+            <button onClick={() => { playSfx('click'); setCheckout(true); }} className="w-full bg-purple-800 text-white font-bold py-4 rounded-2xl flex items-center justify-between px-6 shadow-xl active:scale-95 transition-transform"><div className="flex flex-col items-start leading-tight"><span className="text-xs text-purple-300">{count} items</span><span className="font-black text-xl">₹{total}</span></div><span className="bg-white/20 px-4 py-2 rounded-xl">Checkout</span></button>
+          </div>
+        )}
+
+        {checkout && (
+          <div className="absolute inset-0 bg-purple-950/80 backdrop-blur-sm z-30 flex items-end">
+            <div className="bg-white w-full rounded-t-[2.5rem] p-6 pb-8 shadow-2xl max-h-[90%] overflow-y-auto">
+              <div className="flex justify-between items-center mb-5"><h3 className="text-2xl font-black text-slate-900">Your Order</h3><button onClick={() => { playSfx('click'); setCheckout(false); }} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200"><X className="w-5 h-5" /></button></div>
+              <div className="bg-purple-50 p-5 rounded-3xl mb-6 border border-purple-100 shadow-inner">
+                <p className="text-xs font-bold text-purple-600 uppercase mb-2 tracking-widest">Total Bill</p><div className="text-4xl font-black text-purple-900 mb-4">₹{total}</div>
+                <div className="space-y-3 max-h-48 overflow-y-auto pr-2">{cart.map(c => <div key={c.key} className="flex items-center justify-between text-sm text-slate-700 font-bold border-b border-purple-100/50 pb-2"><span className="flex-1">{c.name}</span><div className="flex items-center gap-2 mx-2"><button onClick={() => chg(c.key, -1)} className="px-2 py-1 bg-white rounded-lg shadow-sm">-</button><span>{c.qty}</span><button onClick={() => chg(c.key, 1)} className="px-2 py-1 bg-white rounded-lg shadow-sm">+</button></div><span className="w-12 text-right">₹{c.price * c.qty}</span></div>)}</div>
+              </div>
+              <p className="font-bold text-slate-400 text-xs mb-3 uppercase tracking-widest">Select Payment</p>
+              <div className="space-y-3">
+                <button onClick={() => { playSfx('click'); onPlaceOrder(tableNumber, cart, total, 'Online'); setCart([]); setCheckout(false); }} className="w-full flex items-center p-4 border-2 border-purple-200 rounded-2xl bg-white hover:bg-purple-50 transition-colors"><div className="bg-purple-100 p-3 rounded-xl text-purple-700 mr-4"><CreditCard className="w-6 h-6" /></div><div><h4 className="font-bold text-slate-800 text-lg">Pay via UPI / GPay</h4><p className="text-xs text-slate-500 font-medium">Fast & secure online payment</p></div></button>
+                <button onClick={() => { playSfx('click'); onPlaceOrder(tableNumber, cart, total, 'Cash'); setCart([]); setCheckout(false); }} className="w-full flex items-center p-4 border-2 border-slate-200 rounded-2xl bg-white hover:bg-slate-50 transition-colors"><div className="bg-slate-100 p-3 rounded-xl text-slate-600 mr-4"><Banknote className="w-6 h-6" /></div><div><h4 className="font-bold text-slate-800 text-lg">Cash on Delivery</h4><p className="text-xs text-slate-500 font-medium">Pay directly to the waiter</p></div></button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PaymentTimer({ order }) {
+  const [tl, setTl] = useState(180);
+  useEffect(() => {
+    window.location.href = `upi://pay?pa=${UPI_ID}&pn=${encodeURIComponent(CAFE_NAME)}&am=${order.total}.00&cu=INR&tn=${encodeURIComponent('Table ' + order.table)}`;
+    const t = setInterval(() => setTl(p => p <= 1 ? (clearInterval(t), 0) : p - 1), 1000); return () => clearInterval(t);
+  }, [order]);
+  return (
+    <div className="bg-white p-6 rounded-3xl shadow-lg border-2 border-indigo-100 text-center mb-5 relative overflow-hidden">
+      <div className="absolute top-0 left-0 right-0 h-1 bg-indigo-100"><div className="h-full bg-indigo-600 transition-all duration-1000 linear" style={{ width: `${(tl / 180) * 100}%` }}></div></div>
+      <Clock className="w-10 h-10 text-indigo-600 mx-auto mb-3 animate-pulse" /><h3 className="text-xl font-black text-slate-800 mb-1">Verify Payment in App</h3><p className="text-sm text-slate-500 font-medium mb-4">Please complete the payment on your UPI app. The restaurant is waiting to confirm.</p>
+      <div className="text-5xl font-black text-indigo-700 tabular-nums mb-4 drop-shadow-md">{String(Math.floor(tl / 60)).padStart(2, '0')}:{String(tl % 60).padStart(2, '0')}</div>
+      {tl === 0 && <p className="text-red-500 font-bold text-sm bg-red-50 py-2 rounded-lg">Time expired. Please try ordering again or pay by cash.</p>}
+    </div>
+  );
+}
+
+/* ---------------- FULL ADMIN DASHBOARD ---------------- */
+function AdminDashboard(p) {
+  const [tab, setTab] = useState('orders');
+  
+  // Audio Alerts for New Orders
+  const prevCount = useRef(p.activeOrders.length);
+  useEffect(() => {
+    if (p.activeOrders.length > prevCount.current) {
+      const newOrder = p.activeOrders[0];
+      playSfx('ring');
+      setTimeout(() => {
+        if (newOrder.payment === 'Online') {
+          speak(`New online payment received for Table ${newOrder.table}. Please verify and accept.`);
+        } else {
+          speak(`New Cash on Delivery order for Table ${newOrder.table}.`);
+        }
+      }, 1500);
+    }
+    prevCount.current = p.activeOrders.length;
+  }, [p.activeOrders]);
+
+  const updateStatus = (id, st) => { playSfx('click'); if (st === 'Completed') p.completeOrder(p.activeOrders.find(o => o.id === id)); else p.setActiveOrders(p.activeOrders.map(o => o.id === id ? { ...o, status: st } : o)); };
+  
+  const [soundEnabled, setSoundEnabled] = useState(SOUND_ENABLED);
+  const [voiceEnabled, setVoiceEnabled] = useState(VOICE_ENABLED);
+  
+  const toggleSound = () => { const s = !soundEnabled; setSoundEnabled(s); SOUND_ENABLED = s; playSfx('click'); };
+  const toggleVoice = () => { const v = !voiceEnabled; setVoiceEnabled(v); VOICE_ENABLED = v; playSfx('click'); if(v) speak('Voice alerts enabled'); };
+
+  return (
+    <div className="flex h-screen bg-slate-50 text-slate-900 overflow-hidden font-sans">
+      <aside className="w-20 md:w-64 bg-purple-950 text-purple-300 flex flex-col shadow-2xl z-20">
+        <div className="p-4 md:p-6 flex items-center gap-3 border-b border-purple-900/50"><div className="bg-purple-600 p-2 rounded-xl text-white"><LayoutDashboard className="w-6 h-6" /></div><span className="font-black text-xl hidden md:block text-white">Admin Hub</span></div>
+        <nav className="flex-1 py-6 space-y-2 px-3 overflow-y-auto">
+          <SideBtn icon={<Bell />} label="Live Orders" active={tab === 'orders'} onClick={() => { playSfx('click'); setTab('orders'); }} badge={p.activeOrders.filter(o => o.status === 'Verifying' || o.status === 'Pending').length} />
+          <SideBtn icon={<Utensils />} label="Menu Manager" active={tab === 'menu'} onClick={() => { playSfx('click'); setTab('menu'); }} />
+          <SideBtn icon={<Package />} label="Inventory" active={tab === 'inventory'} onClick={() => { playSfx('click'); setTab('inventory'); }} />
+          <SideBtn icon={<QrCode />} label="Table & QR" active={tab === 'qr'} onClick={() => { playSfx('click'); setTab('qr'); }} />
+          <SideBtn icon={<History />} label="History & Rev" active={tab === 'history'} onClick={() => { playSfx('click'); setTab('history'); }} />
+          <SideBtn icon={<Settings />} label="Settings" active={tab === 'settings'} onClick={() => { playSfx('click'); setTab('settings'); }} />
+        </nav>
+        <div className="p-4 border-t border-purple-900/50"><button onClick={() => { playSfx('click'); p.onExit(); }} className="flex items-center justify-center md:justify-start gap-3 w-full p-3 rounded-xl hover:bg-purple-900 hover:text-white transition-colors"><LogOut className="w-5 h-5" /><span className="font-bold hidden md:block">Logout</span></button></div>
+      </aside>
+
+      <main className="flex-1 flex flex-col h-screen overflow-hidden">
+        <header className="bg-white px-5 md:px-8 py-4 flex justify-between items-center shadow-sm border-b border-slate-200 gap-4">
+          <h1 className="text-xl md:text-2xl font-black text-purple-950 capitalize">{tab.replace('qr', 'Table & QR')}</h1>
+          <div className="flex items-center gap-3">
+            <button onClick={toggleSound} className={`p-2.5 rounded-xl transition-colors ${soundEnabled ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-400'}`}>{soundEnabled ? <Volume2 className="w-5 h-5"/> : <VolumeX className="w-5 h-5"/>}</button>
+            <button onClick={toggleVoice} className={`p-2.5 rounded-xl transition-colors ${voiceEnabled ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-400'}`}><Mic className="w-5 h-5"/></button>
+            <div className="bg-purple-100 text-purple-800 px-4 py-2.5 rounded-xl font-bold hidden md:flex items-center gap-2"><Clock className="w-4 h-4" /> {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+          </div>
+        </header>
+        <div className="flex-1 overflow-y-auto p-4 md:p-6">
+          {tab === 'orders' && <OrdersBoard orders={p.activeOrders} updateStatus={updateStatus} cancelOrder={p.cancelOrder} />}
+          {tab === 'menu' && <MenuTab menuItems={p.menuItems} setMenuItems={p.setMenuItems} />}
+          {tab === 'inventory' && <InventoryTab stockInv={p.stockInv} setStockInv={p.setStockInv} iceInv={p.iceInv} setIceInv={p.setIceInv} />}
+          {tab === 'qr' && <QRTab logo={p.cafeLogo} />}
+          {tab === 'history' && <HistoryTab history={p.orderHistory} setHistory={p.setOrderHistory} />}
+          {tab === 'settings' && <SettingsTab logo={p.cafeLogo} setLogo={p.setCafeLogo} />}
+        </div>
+      </main>
+    </div>
+  );
+}
+
+function SideBtn({ icon, label, active, onClick, badge }) {
+  return (
+    <button onClick={onClick} className={`w-full flex items-center justify-center md:justify-start gap-3 p-3.5 rounded-xl transition-all ${active ? 'bg-purple-700 text-white shadow-lg' : 'hover:bg-purple-900/50 hover:text-white text-purple-200'}`}>
+      <div className="relative">{icon}{badge > 0 && <span className="absolute -top-2 -right-2 bg-pink-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full md:hidden">{badge}</span>}</div>
+      <span className="font-bold hidden md:block text-left flex-1">{label}</span>{badge > 0 && <span className="hidden md:flex bg-pink-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{badge}</span>}
+    </button>
+  );
+}
+
+/* ---------------- 4-COLUMN ORDERS BOARD ---------------- */
+function OrdersBoard({ orders, updateStatus, cancelOrder }) {
+  const col = (s) => orders.filter(o => o.status === s);
+  return (
+    <div className="flex gap-4 h-full min-w-max pb-4 overflow-x-auto">
+      <AdminCol title="Verify Payment" icon={<CreditCard />} list={col('Verifying')} bg="bg-indigo-50" text="text-indigo-900" action="Payment Received & Accept" color="bg-indigo-600" onAction={(id) => updateStatus(id, 'Pending')} onCancel={cancelOrder} />
+      <AdminCol title="New Orders" icon={<Bell />} list={col('Pending')} bg="bg-purple-50" text="text-purple-900" action="Accept & Prep" color="bg-purple-600" onAction={(id) => updateStatus(id, 'Preparing')} onCancel={cancelOrder} blink />
+      <AdminCol title="In Kitchen" icon={<ChefHat />} list={col('Preparing')} bg="bg-amber-50" text="text-amber-900" action="Mark as Ready" color="bg-amber-500" onAction={(id) => updateStatus(id, 'Ready')} onCancel={cancelOrder} />
+      <AdminCol title="Ready to Serve" icon={<CheckCircle />} list={col('Ready')} bg="bg-green-50" text="text-green-900" action="Complete Order" color="bg-green-600" onAction={(id) => updateStatus(id, 'Completed')} onCancel={cancelOrder} />
+    </div>
+  );
+}
+function AdminCol({ title, icon, list, bg, text, action, color, onAction, onCancel, blink }) {
+  return (
+    <div className="w-80 flex flex-col bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden shrink-0">
+      <div className={`${bg} px-5 py-4 border-b border-slate-200 flex justify-between items-center`}><h3 className={`font-black flex items-center gap-2 ${text}`}><span className="opacity-80">{icon}</span> {title}</h3><span className={`bg-white ${text} text-xs font-black px-3 py-1.5 rounded-lg border shadow-sm`}>{list.length}</span></div>
+      <div className="flex-1 p-4 space-y-4 overflow-y-auto bg-slate-50/30">
+        {list.length === 0 && <div className="text-slate-400 text-center py-10 text-sm font-bold border-2 border-dashed border-slate-200 rounded-2xl">Empty</div>}
+        {list.map(o => (
+          <div key={o.id} className={`bg-white p-5 rounded-2xl shadow-sm border-2 ${blink ? 'border-purple-400 shadow-[0_0_20px_rgba(168,85,247,0.2)]' : 'border-slate-100'}`}>
+            <div className="flex justify-between items-start mb-3 border-b border-slate-100 pb-3"><div><h4 className="text-xl font-black text-slate-900">Table {o.table}</h4><span className="text-xs text-slate-400 font-mono font-bold">#{o.id}</span></div><div className="text-xl font-black text-purple-700">₹{o.total}</div></div>
+            <div className="mb-4 space-y-1.5">{o.items.map((it, i) => <div key={i} className="flex gap-2 text-sm text-slate-700 font-bold"><span className="bg-purple-100 text-purple-800 text-xs px-1.5 py-0.5 rounded-md">{it.qty}x</span><span>{it.name}</span></div>)}
+              <div className="pt-3 mt-2 border-t border-dashed border-slate-200 flex justify-between items-center text-xs font-black uppercase"><span className="text-slate-500">Method:</span><span className={`px-2 py-1 rounded-md ${o.payment === 'Online' ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700'}`}>{o.payment}</span></div>
+            </div>
+            <div className="flex gap-2 mt-2"><button onClick={() => onAction(o.id)} className={`flex-1 py-3 rounded-xl font-black text-white shadow-md active:scale-95 transition-transform text-sm ${color}`}>{action}</button><DelBtn onDel={() => onCancel(o.id)} /></div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+/* ---------------- MENU CRUD TAB (WITH DATALIST AUTOCOMPLETE) ---------------- */
+function MenuTab({ menuItems, setMenuItems }) {
+  const [edit, setEdit] = useState(undefined);
+  const save = (item) => { playSfx('save'); setMenuItems(edit ? menuItems.map(i => i.id === edit.id ? item : i) : [item, ...menuItems]); setEdit(undefined); };
+  
+  // Extract unique categories and descriptions for Auto-complete
+  const categories = [...new Set(menuItems.map(i => i.category).filter(Boolean))];
+  const descriptions = [...new Set(menuItems.map(i => i.desc).filter(Boolean))];
+
+  return (
+    <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+      <div className="p-5 border-b border-slate-200 flex justify-between items-center bg-slate-50"><h2 className="text-xl font-black text-slate-800">Menu Catalog ({menuItems.length})</h2><button onClick={() => { playSfx('click'); setEdit(null); }} className="bg-purple-700 hover:bg-purple-800 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2"><Plus className="w-5 h-5" /> Add Item</button></div>
+      <div className="overflow-x-auto"><table className="w-full text-left min-w-[640px]">
+        <thead><tr className="bg-slate-100 text-slate-500 text-xs uppercase border-b"><th className="p-4 pl-6">Img</th><th className="p-4">Name / Category</th><th className="p-4">Price</th><th className="p-4">Status</th><th className="p-4 pr-6 text-right">Actions</th></tr></thead>
+        <tbody className="divide-y divide-slate-100">{menuItems.map(it => (
+          <tr key={it.id} className="hover:bg-slate-50">
+            <td className="p-4 pl-6"><div className="w-12 h-12 bg-slate-200 rounded-xl overflow-hidden flex items-center justify-center">{it.img ? <img src={it.img} alt="" className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-slate-400" />}</div></td>
+            <td className="p-4"><p className="font-bold text-slate-900">{it.name}</p><p className="text-xs text-slate-500">{it.category}</p></td>
+            <td className="p-4 font-black text-purple-700">₹{it.v ? it.v.map(x => x[1]).join(' / ') : it.price}</td>
+            <td className="p-4"><button onClick={() => { playSfx('click'); setMenuItems(menuItems.map(i => i.id === it.id ? { ...i, stock: !i.stock } : i)); }} className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${it.stock ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{it.stock ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}{it.stock ? 'In Stock' : 'Out'}</button></td>
+            <td className="p-4 pr-6 text-right"><div className="flex justify-end gap-2"><button onClick={() => { playSfx('click'); setEdit(it); }} className="p-2 text-slate-400 hover:text-purple-700 bg-slate-50 rounded-xl"><Edit className="w-4 h-4" /></button><DelBtn onDel={() => { playSfx('del'); setMenuItems(menuItems.filter(i => i.id !== it.id)); }} /></div></td>
+          </tr>
+        ))}</tbody>
+      </table></div>
+      {edit !== undefined && <MenuForm item={edit} categories={categories} descriptions={descriptions} onSave={save} onClose={() => setEdit(undefined)} />}
+    </div>
+  );
+}
+
+function MenuForm({ item, categories, descriptions, onSave, onClose }) {
+  const [img, setImg] = useState(item ? item.img : ''); const fileRef = useRef(null); const box = useRef(null);
+  const submit = () => {
+    const f = { get: (n) => box.current.querySelector(`[name="${n}"]`)?.value || '' };
+    if (!f.get('name').trim() || !f.get('category').trim()) return playSfx('error');
+    const vs = (f.get('v') || '').split(',').map(s => s.trim()).filter(Boolean).map(s => { const [l, p] = s.split(':'); return [l.trim(), Number(p)]; }).filter(x => x[0] && x[1]);
+    onSave({ id: item ? item.id : 'm' + Date.now(), name: f.get('name'), category: f.get('category'), desc: f.get('desc'), img, price: vs.length ? vs[0][1] : Number(f.get('price')), v: vs.length > 1 ? vs : null, stock: item ? item.stock : true });
+  };
+  return (
+    <Modal title={item ? 'Edit Item' : 'New Item'} onClose={onClose}>
+      <div ref={box} className="space-y-3">
+        <div><label className="text-xs font-bold text-slate-500 uppercase">Item name</label><input name="name" defaultValue={item?.name} className={inpStyle} /></div>
+        <div className="grid grid-cols-2 gap-3">
+          <div><label className="text-xs font-bold text-slate-500 uppercase">Price (₹)</label><input name="price" type="number" defaultValue={item?.price} className={inpStyle} /></div>
+          <div>
+            <label className="text-xs font-bold text-slate-500 uppercase">Category</label>
+            <input name="category" list="cat-list" defaultValue={item?.category} className={inpStyle} />
+            <datalist id="cat-list">{categories.map(c => <option key={c} value={c} />)}</datalist>
+          </div>
+        </div>
+        <div>
+          <label className="text-xs font-bold text-slate-500 uppercase">Description (Optional)</label>
+          <input name="desc" list="desc-list" defaultValue={item?.desc} className={inpStyle} />
+          <datalist id="desc-list">{descriptions.map(d => <option key={d} value={d} />)}</datalist>
+        </div>
+        <div><label className="text-xs font-bold text-slate-500 uppercase">Sizes (opt) e.g. Regular:149, Large:189</label><input name="v" defaultValue={item?.v ? item.v.map(x => x.join(':')).join(', ') : ''} className={inpStyle + ' text-sm'} /></div>
+        <div>
+          <label className="text-xs font-bold text-slate-500 uppercase">Photo (Optional)</label>
+          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={async (e) => { if (e.target.files[0]) { playSfx('save'); setImg(await readImg(e.target.files[0])); } }} />
+          <div className="flex gap-3 items-center mt-1"><div className="w-16 h-16 bg-slate-100 rounded-xl overflow-hidden flex justify-center items-center">{img ? <img src={img} className="w-full h-full object-cover" /> : <ImageIcon className="w-6 h-6 text-slate-300" />}</div><button type="button" onClick={() => { playSfx('click'); fileRef.current.click(); }} className="bg-purple-100 text-purple-800 font-bold px-4 py-2 rounded-xl flex items-center gap-2"><Upload className="w-4 h-4"/> Upload Image</button></div>
+        </div>
+        <button type="button" onClick={submit} className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-4 rounded-xl mt-4">Save Item</button>
+      </div>
+    </Modal>
+  );
+}
+
+/* ---------------- 2-SECTION INVENTORY TAB (WITH DATALIST AUTOCOMPLETE) ---------------- */
+function InventoryTab({ stockInv, setStockInv, iceInv, setIceInv }) {
+  const stockLows = stockInv.filter(i => i.qty <= i.min);
+  const iceLows = iceInv.filter(i => i.qty <= i.min);
+
+  return (
+    <div className="space-y-8">
+      {stockLows.length > 0 && <div className="bg-red-50 border border-red-200 text-red-800 rounded-2xl p-4 font-bold text-sm flex gap-2"><AlertTriangle className="w-5 h-5"/>{stockLows.map(l => `${l.name} is low`).join('. ')}</div>}
+      {iceLows.length > 0 && <div className="bg-orange-50 border border-orange-200 text-orange-800 rounded-2xl p-4 font-bold text-sm flex gap-2"><AlertTriangle className="w-5 h-5"/>Ice Cream Low: {iceLows.map(l => l.name).join(', ')}</div>}
+      
+      <InvSection title="Ice Cream Inventory" icon={<IceCream className="w-5 h-5"/>} items={iceInv} setItems={setIceInv} prefix="ic" />
+      <InvSection title="Stock Inventory" icon={<Package className="w-5 h-5"/>} items={stockInv} setItems={setStockInv} prefix="i" />
+    </div>
+  );
+}
+
+function InvSection({ title, icon, items, setItems, prefix }) {
+  const [edit, setEdit] = useState(undefined); const box = useRef(null);
+  const upd = (id, d) => { playSfx(d > 0 ? 'add' : 'remove'); setItems(items.map(i => i.id === id ? { ...i, qty: Math.max(0, i.qty + d) } : i)); };
+  const save = () => { const f = { get: (n) => box.current.querySelector(`[name="${n}"]`)?.value || '' }; if (!f.get('name')) return playSfx('error'); setItems(edit ? items.map(i => i.id === edit.id ? { ...i, name: f.get('name'), qty: Number(f.get('qty')), min: Number(f.get('min')), unit: f.get('unit') } : i) : [...items, { id: prefix + Date.now(), name: f.get('name'), qty: Number(f.get('qty')), min: Number(f.get('min')), unit: f.get('unit') }]); playSfx('save'); setEdit(undefined); };
+  
+  const names = [...new Set(items.map(i => i.name).filter(Boolean))];
+  const units = [...new Set(items.map(i => i.unit).filter(Boolean))];
+  
+  return (
+    <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+      <div className="p-5 border-b border-slate-200 flex justify-between items-center bg-slate-50"><h2 className="text-xl font-black text-slate-800 flex items-center gap-2">{icon} {title}</h2><button onClick={() => { playSfx('click'); setEdit(null); }} className="bg-purple-700 text-white px-4 py-2 rounded-xl font-bold flex gap-2"><Plus className="w-4 h-4" /> Add</button></div>
+      <table className="w-full text-left"><thead className="bg-slate-100 text-slate-500 text-xs uppercase"><tr><th className="p-4 pl-6">Item</th><th className="p-4">Qty</th><th className="p-4">Alert At</th><th className="p-4 text-right pr-6">Actions</th></tr></thead>
+        <tbody className="divide-y divide-slate-100">{items.map(i => (
+          <tr key={i.id} className={i.qty <= i.min ? 'bg-red-50/60' : ''}>
+            <td className="p-4 pl-6 font-bold">{i.name}</td>
+            <td className="p-4"><div className="flex items-center gap-2"><button onClick={() => upd(i.id, -1)} className="p-1.5 bg-slate-100 rounded-lg"><Minus className="w-4 h-4"/></button><span className="font-black w-20 text-center">{i.qty} {i.unit}</span><button onClick={() => upd(i.id, 1)} className="p-1.5 bg-slate-100 rounded-lg"><Plus className="w-4 h-4"/></button></div></td>
+            <td className="p-4 font-bold text-slate-500">{i.min}</td>
+            <td className="p-4 pr-6 text-right"><button onClick={() => { playSfx('click'); setEdit(i); }} className="p-2 text-slate-400 bg-slate-50 rounded-xl mr-2"><Edit className="w-4 h-4"/></button><DelBtn onDel={() => { playSfx('del'); setItems(items.filter(x => x.id !== i.id)); }} /></td>
+          </tr>
+        ))}
+        {items.length === 0 && <tr><td colSpan="4" className="p-8 text-center font-bold text-slate-400">Empty List</td></tr>}
+        </tbody>
+      </table>
+      {edit !== undefined && (
+        <Modal title={edit ? 'Edit Item' : 'Add Item'} onClose={() => setEdit(undefined)}>
+          <div ref={box} className="space-y-3">
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase">Name</label>
+              <input name="name" list={`name-list-${prefix}`} defaultValue={edit?.name} className={inpStyle} />
+              <datalist id={`name-list-${prefix}`}>{names.map(n => <option key={n} value={n} />)}</datalist>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-xs font-bold text-slate-500 uppercase">Quantity</label><input name="qty" type="number" defaultValue={edit?.qty ?? 0} className={inpStyle} /></div>
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase">Unit</label>
+                <input name="unit" list={`unit-list-${prefix}`} defaultValue={edit?.unit || (prefix === 'ic' ? 'scoops' : 'pcs')} className={inpStyle} />
+                <datalist id={`unit-list-${prefix}`}>{units.map(u => <option key={u} value={u} />)}</datalist>
+              </div>
+            </div>
+            <div><label className="text-xs font-bold text-slate-500 uppercase">Low Alert Limit</label><input name="min" type="number" defaultValue={edit?.min ?? 10} className={inpStyle} /></div>
+            <button type="button" onClick={save} className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-4 rounded-xl mt-2">Save</button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+/* ---------------- EXACT LAYOUT QR GENERATOR ---------------- */
+function QRTab({ logo }) {
+  const [link, setLink] = useState('');
+  const [tbl, setTbl] = useState('');
+  const [cardData, setCardData] = useState(null);
+
+  const generate = () => {
+    if (!link.trim() || !tbl.trim()) return playSfx('error');
+    playSfx('save');
+    setCardData({ link: link.trim(), tbl: tbl.trim() });
+  };
+
+  const printCard = () => {
+    if (!cardData) return;
+    playSfx('click');
+    const qrImage = getQrUrl(cardData.link);
+    const logoImg = logo || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23d8b4fe" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2M14 2v2M6 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1z"/><path d="M17 11h1a3 3 0 0 1 0 6h-1"/></svg>';
+    
+    // HTML replicating the purple curved card
+    const html = `
+      <div style="width:340px; margin:20px auto; background:#fff; border-radius:36px; overflow:hidden; box-shadow:0 10px 30px rgba(0,0,0,0.1); font-family:sans-serif; text-align:center; padding-bottom:30px;">
+        <div style="background:#7e22ce; color:#fff; padding:30px 20px 80px; border-radius: 0 0 40px 40px;">
+          ${logo ? `<img src="${logo}" style="width:40px; height:40px; border-radius:50%; margin-bottom:10px; object-fit:cover;"/>` : `<img src="${logoImg}" style="width:40px; height:40px; margin-bottom:10px;"/>`}
+          <h1 style="font-size:36px; margin:0; font-weight:900; letter-spacing:1px;">Table ${cardData.tbl}</h1>
+          <p style="font-size:12px; font-weight:bold; letter-spacing:2px; color:#d8b4fe; margin-top:5px; margin-bottom:0;">SCAN TO ORDER</p>
+        </div>
+        <div style="background:#fff; width:220px; height:220px; margin:-60px auto 0; border-radius:24px; padding:10px; box-shadow:0 8px 24px rgba(0,0,0,0.15);">
+          <img src="${qrImage}" style="width:100%; height:100%; object-fit:contain;"/>
+        </div>
+        <h2 style="color:#4c1d95; font-size:18px; font-weight:900; margin:20px 0 0 0;">${CAFE_NAME}</h2>
+      </div>
+    `;
+    const f = document.createElement('iframe'); f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0'; document.body.appendChild(f);
+    const d = f.contentWindow.document; d.open(); d.write(`<html><head><title>QR Card Table ${cardData.tbl}</title></head><body>${html}</body></html>`); d.close();
+    setTimeout(() => { f.contentWindow.focus(); f.contentWindow.print(); setTimeout(() => f.remove(), 60000); }, 500);
+  };
+
+  return (
+    <div className="flex flex-col md:flex-row gap-8 items-start">
+      <div className="w-full md:w-1/2 bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
+        <h2 className="font-black text-2xl text-purple-950 mb-4 flex items-center gap-2"><QrCode/> Create QR Card</h2>
+        <div className="space-y-4">
+          <div><label className="text-xs font-bold text-slate-500 uppercase">1. Insert Website Link</label><input placeholder="https://..." value={link} onChange={e => setLink(e.target.value)} className={inpStyle} /></div>
+          <div><label className="text-xs font-bold text-slate-500 uppercase">2. Enter Table Number</label><input placeholder="e.g. 5" value={tbl} onChange={e => setTbl(e.target.value)} className={inpStyle} /></div>
+          <button onClick={generate} className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-4 rounded-xl">Generate Card View</button>
+        </div>
+      </div>
+      
+      {cardData && (
+        <div className="w-full md:w-1/2 flex flex-col items-center justify-center p-8 bg-slate-200/50 rounded-3xl border-2 border-dashed border-slate-300">
+          <div className="w-[300px] bg-white rounded-[32px] overflow-hidden shadow-2xl text-center pb-6 border border-slate-100">
+            <div className="bg-[#7e22ce] text-white pt-6 pb-[70px] rounded-b-[40px]">
+              {logo ? <img src={logo} className="w-10 h-10 rounded-full mx-auto mb-2 object-cover" alt="logo" /> : <Coffee className="w-8 h-8 text-[#d8b4fe] mx-auto mb-2" />}
+              <h1 className="text-4xl font-black m-0 leading-none">Table {cardData.tbl}</h1>
+              <p className="text-[10px] font-black tracking-[0.2em] text-[#d8b4fe] mt-2">SCAN TO ORDER</p>
+            </div>
+            <div className="bg-white w-48 h-48 mx-auto -mt-14 rounded-3xl p-3 shadow-[0_8px_30px_rgba(0,0,0,0.15)] relative z-10">
+              <img src={getQrUrl(cardData.link)} alt="QR" className="w-full h-full object-contain" />
+            </div>
+            <h2 className="text-[#4c1d95] font-black text-lg mt-5 tracking-tight">{CAFE_NAME}</h2>
+          </div>
+          <button onClick={printCard} className="mt-8 bg-slate-800 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg hover:bg-slate-700"><Printer className="w-5 h-5"/> Print Card</button>
+        </div>
+      )}
+    </div>
+  );
+}
+/* ---------------- HISTORY & REVENUE TAB ---------------- */
+function HistoryTab({ history, setHistory }) {
+  const [from, setFrom] = useState(''); const [to, setTo] = useState('');
+  const rows = useMemo(() => history.filter(o => { const d = new Date(o.completedAt || o.time); const ymdStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); return (!from || ymdStr >= from) && (!to || ymdStr <= to); }), [history, from, to]);
+  const rev = rows.reduce((s, o) => s + o.total, 0); const onl = rows.filter(o => o.payment === 'Online').reduce((s, o) => s + o.total, 0);
+  
+  const dlCsv = () => {
+    playSfx('save');
+    let c = 'ID,Table,Date,Time,Payment,Total,Items\n' + rows.map(o => { const d = new Date(o.completedAt || o.time); return `${o.id},${o.table},${d.toLocaleDateString()},${d.toLocaleTimeString()},${o.payment},${o.total},"${o.items.map(i => `${i.qty}x${i.name}`).join('; ')}"`; }).join('\n');
+    c += `\n,,,,TOTAL,${rev},`; download(`revenue_${from || 'all'}_${to || 'all'}.csv`, c);
+  };
+  return (
+    <div className="space-y-6">
+      <div className="bg-white rounded-3xl border border-slate-200 p-5 flex flex-wrap gap-4 items-end">
+        <div><label className="text-xs font-bold text-slate-500 uppercase">From date</label><input type="date" value={from} onChange={e => { playSfx('click'); setFrom(e.target.value); }} className={inpStyle + ' py-2'} /></div>
+        <div><label className="text-xs font-bold text-slate-500 uppercase">To date</label><input type="date" value={to} onChange={e => { playSfx('click'); setTo(e.target.value); }} className={inpStyle + ' py-2'} /></div>
+        <button onClick={() => { playSfx('click'); setFrom(''); setTo(''); }} className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 font-bold text-sm hover:bg-slate-200">Clear</button>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-purple-800 rounded-3xl p-6 text-white md:col-span-2"><p className="text-purple-200 font-bold text-sm mb-1">Total sales</p><h2 className="text-4xl font-black">₹{rev}</h2><p className="text-sm text-purple-300 mt-1">Online ₹{onl} · Cash ₹{rev - onl}</p></div>
+        <div className="bg-white rounded-3xl p-6 border border-slate-200"><p className="text-slate-500 font-bold text-sm mb-1">Orders Completed</p><h2 className="text-4xl font-black text-slate-800">{rows.length}</h2></div>
+        <div className="bg-white rounded-3xl p-4 border border-slate-200 flex flex-col justify-center"><button onClick={dlCsv} disabled={!rows.length} className="bg-indigo-600 text-white font-black py-3 rounded-xl flex items-center justify-center gap-2 disabled:opacity-40"><Download className="w-4 h-4"/> Download CSV</button></div>
+      </div>
+      <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden"><table className="w-full text-left min-w-[760px]">
+        <thead className="bg-slate-50 text-slate-400 text-xs uppercase"><tr><th className="p-4 pl-6">Order</th><th className="p-4">Date</th><th className="p-4">Table / Items</th><th className="p-4">Pay Mode</th><th className="p-4 text-right">Amount</th><th className="p-4 pr-6 text-right">Action</th></tr></thead>
+        <tbody className="divide-y divide-slate-50">{rows.map(o => (
+          <tr key={o.id} className="hover:bg-slate-50">
+            <td className="p-4 pl-6 font-mono font-bold text-slate-600">#{o.id}</td>
+            <td className="p-4 text-sm text-slate-500">{new Date(o.completedAt || o.time).toLocaleString()}</td>
+            <td className="p-4"><p className="font-bold">{o.table}</p><p className="text-xs text-slate-500 truncate max-w-[200px]">{o.items.map(i => `${i.qty}x ${i.name}`).join(', ')}</p></td>
+            <td className="p-4"><span className={`px-2 py-1 rounded-md text-xs font-bold ${o.payment === 'Online' ? 'bg-indigo-50 text-indigo-700' : 'bg-amber-50 text-amber-700'}`}>{o.payment}</span></td>
+            <td className="p-4 font-black text-purple-700 text-right text-lg">₹{o.total}</td>
+            <td className="p-4 pr-6 text-right"><DelBtn onDel={() => { playSfx('del'); setHistory(history.filter(x => x.id !== o.id)); }} /></td>
+          </tr>
+        ))}
+        {rows.length === 0 && <tr><td colSpan="6" className="p-10 text-center font-bold text-slate-400">No history found.</td></tr>}
+        </tbody>
+      </table></div>
+    </div>
+  );
+}
+
+/* ---------------- SETTINGS TAB (LOGO UPLOAD) ---------------- */
+function SettingsTab({ logo, setLogo }) {
+  const fileRef = useRef(null);
+  return (
+    <div className="bg-white rounded-3xl border border-slate-200 p-8 max-w-xl">
+      <h2 className="text-2xl font-black text-slate-900 mb-6">Café Settings</h2>
+      <div className="flex flex-col items-center bg-slate-50 p-8 rounded-3xl border-2 border-dashed border-slate-200">
+        <div className="w-32 h-32 bg-white rounded-full shadow-lg flex items-center justify-center overflow-hidden mb-5 border-4 border-purple-100">
+          {logo ? <img src={logo} alt="Logo" className="w-full h-full object-cover"/> : <Coffee className="w-12 h-12 text-purple-300" />}
+        </div>
+        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={async (e) => { if (e.target.files[0]) { playSfx('save'); setLogo(await readImg(e.target.files[0])); } }} />
+        <button onClick={() => { playSfx('click'); fileRef.current.click(); }} className="bg-purple-700 hover:bg-purple-800 text-white font-bold px-6 py-3 rounded-xl flex items-center gap-2 shadow-md"><Upload className="w-5 h-5"/> Upload Logo</button>
+        {logo && <button onClick={() => { playSfx('del'); setLogo(''); }} className="text-red-500 font-bold text-sm mt-4 hover:underline">Remove Logo</button>}
+        <p className="text-xs text-slate-400 text-center mt-4 max-w-xs">Upload a circular logo for the landing page wheel and printed QR cards.</p>
+      </div>
+    </div>
+  );
+}
