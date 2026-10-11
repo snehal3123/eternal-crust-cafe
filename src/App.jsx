@@ -227,9 +227,10 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const unsubMenu = onSnapshot(collection(db, 'menu'), (snap) => {
+    // Using 'eternal_menu_v2' collection to ensure fresh clean loading without old 'p1' conflicts
+    const unsubMenu = onSnapshot(collection(db, 'eternal_menu_v2'), (snap) => {
       if (snap.empty) {
-        initialMenu.forEach(item => setDoc(doc(db, 'menu', item.id), item));
+        initialMenu.forEach(item => setDoc(doc(db, 'eternal_menu_v2', item.id), item));
       } else {
         setMenuItems(snap.docs.map(d => ({ ...d.data(), id: d.id })));
       }
@@ -525,26 +526,23 @@ function PaymentTimer({ order }) {
   );
 }
 
-/* ---------------- FULL ADMIN DASHBOARD WITH REPEATING ALERT ---------------- */
+/* ---------------- FULL ADMIN DASHBOARD ---------------- */
 function AdminDashboard(p) {
   const [tab, setTab] = useState('orders');
   
-  // Smart Repeating Alert every 10 seconds until unaccepted orders exist
   const pendingOrders = p.activeOrders.filter(o => o.status === 'Verifying' || o.status === 'Pending');
   
   useEffect(() => {
     if (pendingOrders.length === 0) return;
     
-    // Play immediately on mount/new order
     playSfx('ring');
     const firstOrder = pendingOrders[0];
     if (firstOrder.payment === 'Online') {
-      speak(`New online payment received for Table ${firstOrder.table}. Please verify and accept.`);
+      speak(`New online payment received for Table ${firstOrder.table}. Please accept.`);
     } else {
       speak(`New Cash on Delivery order for Table ${firstOrder.table}. Please accept.`);
     }
 
-    // Repeat every 10 seconds until accepted
     const interval = setInterval(() => {
       if (pendingOrders.length > 0) {
         playSfx('ring');
@@ -661,19 +659,19 @@ function MenuTab({ menuItems, db }) {
   const save = async (item) => {
     playSfx('save');
     if (edit && edit.id) {
-      await updateDoc(doc(db, 'menu', edit.id), item);
+      await updateDoc(doc(db, 'eternal_menu_v2', edit.id), item);
     } else {
-      await setDoc(doc(db, 'menu', 'm' + Date.now()), item);
+      await setDoc(doc(db, 'eternal_menu_v2', 'm' + Date.now()), item);
     }
     setEdit(undefined);
   };
   const toggleStock = async (it) => {
     playSfx('click');
-    await updateDoc(doc(db, 'menu', it.id), { stock: !it.stock });
+    await updateDoc(doc(db, 'eternal_menu_v2', it.id), { stock: !it.stock });
   };
   const deleteItem = async (id) => {
     playSfx('del');
-    await deleteDoc(doc(db, 'menu', id));
+    await deleteDoc(doc(db, 'eternal_menu_v2', id));
   };
 
   const categories = [...new Set(menuItems.map(i => i.category).filter(Boolean))];
