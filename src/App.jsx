@@ -5,10 +5,6 @@ import {
   CreditCard, Banknote, X, History, Download, Image as ImageIcon, Package, AlertTriangle, Upload, IceCream, Lock, Eye, EyeOff, Settings, Volume2, VolumeX, Mic
 } from 'lucide-react';
 
-// --- FIREBASE INITIALIZATION AT TOP LEVEL ---
-import { initializeApp } from "firebase/app";
-import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc } from "firebase/firestore";
-
 /* ---------------- AUDIO & VOICE ENGINE ---------------- */
 let AC = null;
 let SOUND_ENABLED = true;
@@ -59,7 +55,7 @@ const readImg = (f) => new Promise((res) => {
   const r = new FileReader(); r.onload = () => { const im = new Image(); im.onload = () => { const c = document.createElement('canvas'); const s = Math.min(1, 600 / Math.max(im.width, im.height)); c.width = im.width * s; c.height = im.height * s; c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); res(c.toDataURL('image/jpeg', 0.8)); }; im.src = r.result; }; r.readAsDataURL(f);
 });
 
-// Full Menu matching the printed menu cards
+// Full Menu matching the printed menu cards[span_0](start_span)[span_0](end_span)[span_1](start_span)[span_1](end_span)[span_2](start_span)[span_2](end_span)[span_3](start_span)[span_3](end_span)
 const initialMenu = [
   { id: 'p1', category: 'Pizza', name: 'Small Pizza', price: 139, stock: true },
   { id: 'p2', category: 'Pizza', name: 'Classic Margarita Pizza', price: 149, v: [['Regular', 149], ['Large', 189]], stock: true },
@@ -180,6 +176,9 @@ const initialIceCream = [{ id: 'ic1', name: 'Vanilla', qty: 50, unit: 'scoops', 
 const initialTables = Array.from({ length: 15 }, (_, i) => ({ id: `t${i + 1}`, name: `${i + 1}` }));
 
 /* ---------------- FIREBASE CONFIG ---------------- */
+import { initializeApp } from "firebase/app";
+import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc } from "firebase/firestore";
+
 const firebaseConfig = {
   apiKey: "AIzaSyAsmMqePWXD27z7EMAOUetSC5HqV03ScpM",
   authDomain: "eternalcrust.firebaseapp.com",
@@ -379,8 +378,8 @@ function LandingView({ tables, activeOrders, logo, onJoin, onAdminLogin }) {
 }
 
 function AdminLoginModal({ onClose, onSuccess }) {
-  const [u, setU] = useState('Eternalcrust2026'); 
-  const [p, setP] = useState('Eternalcrust2026@forever'); 
+  const [u, setU] = useState(''); 
+  const [p, setP] = useState(''); 
   const [sp, setSp] = useState(false); 
   const [err, setErr] = useState('');
 
@@ -388,8 +387,8 @@ function AdminLoginModal({ onClose, onSuccess }) {
     <Modal title="Admin Access" onClose={onClose}>
       <form onSubmit={(e) => { e.preventDefault(); if (u === 'Eternalcrust2026' && p === 'Eternalcrust2026@forever') { playSfx('success'); onSuccess(); } else { playSfx('error'); setErr('Invalid credentials'); } }} className="space-y-4">
         {err && <div className="bg-red-50 text-red-600 p-3 rounded-xl text-sm font-bold text-center">{err}</div>}
-        <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Username</label><input value={u} onChange={e => setU(e.target.value)} className={inpStyle} autoComplete="username" /></div>
-        <div className="relative"><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Password</label><input type={sp ? 'text' : 'password'} value={p} onChange={e => setP(e.target.value)} className={inpStyle} autoComplete="current-password" /><button type="button" onClick={() => setSp(!sp)} className="absolute right-4 top-[34px] text-slate-400">{sp ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}</button></div>
+        <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Username</label><input type="text" name="username" value={u} onChange={e => setU(e.target.value)} className={inpStyle} autoComplete="username" placeholder="Enter username" /></div>
+        <div className="relative"><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Password</label><input type={sp ? 'text' : 'password'} name="password" value={p} onChange={e => setP(e.target.value)} className={inpStyle} autoComplete="current-password" placeholder="Enter password" /><button type="button" onClick={() => setSp(!sp)} className="absolute right-4 top-[34px] text-slate-400">{sp ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}</button></div>
         <button type="submit" className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-4 rounded-xl mt-2">Login</button>
       </form>
     </Modal>
@@ -455,7 +454,6 @@ function CustomerView({ tableNumber, menuItems, activeOrders, onPlaceOrder, onEx
             <button onClick={() => { playSfx('click'); setCheckout(true); }} className="w-full bg-purple-800 text-white font-bold py-4 rounded-2xl flex items-center justify-between px-6 shadow-xl active:scale-95 transition-transform"><div className="flex flex-col items-start leading-tight"><span className="text-xs text-purple-300">{count} items</span><span className="font-black text-xl">₹{total}</span></div><span className="bg-white/20 px-4 py-2 rounded-xl">Checkout</span></button>
           </div>
         )}
-
         {checkout && (
           <div className="absolute inset-0 bg-purple-950/80 backdrop-blur-sm z-30 flex items-end">
             <div className="bg-white w-full rounded-t-[2.5rem] p-6 pb-8 shadow-2xl max-h-[90%] overflow-y-auto">
@@ -572,8 +570,9 @@ function SideBtn({ icon, label, active, onClick, badge }) {
       <span className="font-bold hidden md:block text-left flex-1">{label}</span>{badge > 0 && <span className="hidden md:flex bg-pink-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{badge}</span>}
     </button>
   );
-                                                                                           }
-   /* ---------------- 4-COLUMN ORDERS BOARD ---------------- */
+}
+
+/* ---------------- 4-COLUMN ORDERS BOARD ---------------- */
 function OrdersBoard({ orders, updateStatus, cancelOrder }) {
   const col = (s) => orders.filter(o => o.status === s);
   return (
@@ -658,83 +657,18 @@ function MenuForm({ item, categories, descriptions, onSave, onClose }) {
     onSave({ name: f.get('name'), category: f.get('category'), desc: f.get('desc'), img, price: vs.length ? vs[0][1] : Number(f.get('price')), v: vs.length > 1 ? vs : null, stock: item ? item.stock : true });
   };
   return (
-    <Modal title={item ? 'Edit Item' : 'New Item'} onClose={onClose}>
-      <div ref={box} className="space-y-3">
-        <div><label className="text-xs font-bold text-slate-500 uppercase">Item name</label><input name="name" defaultValue={item?.name} className={inpStyle} /></div>
-        <div className="grid grid-cols-2 gap-3">
-          <div><label className="text-xs font-bold text-slate-500 uppercase">Price (₹)</label><input name="price" type="number" defaultValue={item?.price} className={inpStyle} /></div>
-          <div>
-            <label className="text-xs font-bold text-slate-500 uppercase">Category</label>
-            <input name="category" list="cat-list" defaultValue={item?.category} className={inpStyle} />
-            <datalist id="cat-list">{categories.map(c => <option key={c} value={c} />)}</datalist>
-          </div>
-        </div>
-        <div>
-          <label className="text-xs font-bold text-slate-500 uppercase">Description (Optional)</label>
-          <input name="desc" list="desc-list" defaultValue={item?.desc} className={inpStyle} />
-          <datalist id="desc-list">{descriptions.map(d => <option key={d} value={d} />)}</datalist>
-        </div>
-        <div><label className="text-xs font-bold text-slate-500 uppercase">Sizes (opt) e.g. Regular:149, Large:189</label><input name="v" defaultValue={item?.v ? item.v.map(x => x.join(':')).join(', ') : ''} className={inpStyle + ' text-sm'} /></div>
-        <div>
-          <label className="text-xs font-bold text-slate-500 uppercase">Photo (Optional)</label>
-          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={async (e) => { if (e.target.files[0]) { playSfx('save'); setImg(await readImg(e.target.files[0])); } }} />
-          <div className="flex gap-3 items-center mt-1"><div className="w-16 h-16 bg-slate-100 rounded-xl overflow-hidden flex justify-center items-center">{img ? <img src={img} className="w-full h-full object-cover" /> : <ImageIcon className="w-6 h-6 text-slate-300" />}</div><button type="button" onClick={() => { playSfx('click'); fileRef.current.click(); }} className="bg-purple-100 text-purple-800 font-bold px-4 py-2 rounded-xl flex items-center gap-2"><Upload className="w-4 h-4"/> Upload Image</button></div>
-        </div>
-        <button type="button" onClick={submit} className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-4 rounded-xl mt-4">Save Item</button>
-      </div>
-    </Modal>
-  );
-        }
-
-/* ---------------- INVENTORY TAB ---------------- */
-function InventoryTab({ stockInv, iceInv, db }) {
-  const stockLows = stockInv.filter(i => i.qty <= i.min);
-  const iceLows = iceInv.filter(i => i.qty <= i.min);
-
-  return (
-    <div className="space-y-8">
-      {stockLows.length > 0 && <div className="bg-red-50 border border-red-200 text-red-800 rounded-2xl p-4 font-bold text-sm flex gap-2"><AlertTriangle className="w-5 h-5"/>{stockLows.map(l => `${l.name} is low`).join('. ')}</div>}
-      {iceLows.length > 0 && <div className="bg-orange-50 border border-orange-200 text-orange-800 rounded-2xl p-4 font-bold text-sm flex gap-2"><AlertTriangle className="w-5 h-5"/>Ice Cream Low: {iceLows.map(l => l.name).join(', ')}</div>}
-      
-      <InvSection title="Ice Cream Inventory" icon={<IceCream className="w-5 h-5"/>} items={iceInv} colName="icecream" db={db} prefix="ic" />
-      <InvSection title="Stock Inventory" icon={<Package className="w-5 h-5"/>} items={stockInv} colName="stock" db={db} prefix="i" />
-    </div>
-  );
-}
-
-function InvSection({ title, icon, items, colName, db, prefix }) {
-  const [edit, setEdit] = useState(undefined); const box = useRef(null);
-  const upd = async (id, qty, d) => {
-    playSfx(d > 0 ? 'add' : 'remove');
-    await updateDoc(doc(db, colName, id), { qty: Math.max(0, qty + d) });
-  };
-  const save = async () => {
-    const f = { get: (n) => box.current.querySelector(`[name="${n}"]`)?.value || '' };
-    if (!f.get('name')) return playSfx('error');
-    playSfx('save');
-    const data = { name: f.get('name'), qty: Number(f.get('qty')), min: Number(f.get('min')), unit: f.get('unit') };
-    if (edit && edit.id) {
-      await updateDoc(doc(db, colName, edit.id), data);
-    } else {
-      await setDoc(doc(db, colName, prefix + Date.now()), data);
-    }
-    setEdit(undefined);
-  };
-  const deleteInv = async (id) => { playSfx('del'); await deleteDoc(doc(db, colName, id)); };
-
-  const names = [...new Set(items.map(i => i.name).filter(Boolean))];
-  const units = [...new Set(items.map(i => i.unit).filter(Boolean))];
-  
-  return (
     <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
-      <div className="p-5 border-b border-slate-200 flex justify-between items-center bg-slate-50"><h2 className="text-xl font-black text-slate-800 flex items-center gap-2">{icon} {title}</h2><button onClick={() => { playSfx('click'); setEdit(null); }} className="bg-purple-700 text-white px-4 py-2 rounded-xl font-bold flex gap-2"><Plus className="w-4 h-4" /> Add</button></div>
+      <div className="p-5 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+        <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">{icon} {title}</h2>
+        <button onClick={() => { playSfx('click'); setEdit(null); }} className="bg-purple-700 text-white px-4 py-2 rounded-xl font-bold flex gap-2 items-center"><Plus className="w-4 h-4" /> Add Item</button>
+      </div>
       <table className="w-full text-left"><thead className="bg-slate-100 text-slate-500 text-xs uppercase"><tr><th className="p-4 pl-6">Item</th><th className="p-4">Qty</th><th className="p-4">Alert At</th><th className="p-4 text-right pr-6">Actions</th></tr></thead>
         <tbody className="divide-y divide-slate-100">{items.map(i => (
           <tr key={i.id} className={i.qty <= i.min ? 'bg-red-50/60' : ''}>
             <td className="p-4 pl-6 font-bold">{i.name}</td>
             <td className="p-4"><div className="flex items-center gap-2"><button onClick={() => upd(i.id, i.qty, -1)} className="p-1.5 bg-slate-100 rounded-lg"><Minus className="w-4 h-4"/></button><span className="font-black w-20 text-center">{i.qty} {i.unit}</span><button onClick={() => upd(i.id, i.qty, 1)} className="p-1.5 bg-slate-100 rounded-lg"><Plus className="w-4 h-4"/></button></div></td>
             <td className="p-4 font-bold text-slate-500">{i.min}</td>
-            <td className="p-4 pr-6 text-right"><div className="flex justify-end gap-2"><button onClick={() => { playSfx('click'); setEdit(i); }} className="p-2 text-slate-400 bg-slate-50 rounded-xl"><Edit className="w-4 h-4"/></button><DelBtn onDel={() => deleteInv(i.id)} /></div></td>
+            <td className="p-4 pr-6 text-right"><div className="flex justify-end gap-2"><button onClick={() => { playSfx('click'); setEdit(i); }} className="p-2 text-slate-400 bg-slate-50 rounded-xl hover:text-purple-700"><Edit className="w-4 h-4"/></button><DelBtn onDel={() => deleteInv(i.id)} /></div></td>
           </tr>
         ))}
         {items.length === 0 && <tr><td colSpan="4" className="p-8 text-center font-bold text-slate-400">Empty List</td></tr>}
@@ -825,7 +759,6 @@ function QRTab({ logo }) {
     </div>
   );
 }
-
 /* ---------------- HISTORY & REVENUE TAB ---------------- */
 function HistoryTab({ history, db }) {
   const [from, setFrom] = useState(''); const [to, setTo] = useState('');
@@ -870,7 +803,8 @@ function HistoryTab({ history, db }) {
       </table></div>
     </div>
   );
-          }
+}
+
 /* ---------------- SETTINGS TAB ---------------- */
 function SettingsTab({ logo, db }) {
   const fileRef = useRef(null);
