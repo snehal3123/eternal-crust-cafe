@@ -37,12 +37,15 @@ const playSfx = (name) => {
 
 const speak = (txt) => {
   if (!VOICE_ENABLED || !window.speechSynthesis) return;
-  const u = new SpeechSynthesisUtterance(txt);
-  const voices = window.speechSynthesis.getVoices();
-  const femaleVoice = voices.find(v => /(female|samantha|zira|google us english|heera|veena)/i.test(v.name));
-  if (femaleVoice) u.voice = femaleVoice;
-  u.pitch = 1.1; u.rate = 0.95; u.volume = 1;
-  window.speechSynthesis.speak(u);
+  try {
+    window.speechSynthesis.cancel(); // Stop previous utterance
+    const u = new SpeechSynthesisUtterance(txt);
+    const voices = window.speechSynthesis.getVoices();
+    const femaleVoice = voices.find(v => /(female|samantha|zira|google us english|heera|veena)/i.test(v.name));
+    if (femaleVoice) u.voice = femaleVoice;
+    u.pitch = 1.1; u.rate = 0.95; u.volume = 1;
+    window.speechSynthesis.speak(u);
+  } catch(e) {}
 };
 
 /* ---------------- CONFIG & DATA ---------------- */
@@ -194,9 +197,13 @@ const db = getFirestore(app);
 /* ---------------- MAIN APP ---------------- */
 export default function App() {
   const [sessionTable, setSessionTable] = useState(() => localStorage.getItem('ec_active_table') || null);
-  const [mode, setMode] = useState(sessionTable ? 'customer' : 'landing');
+  const [isAdminAuth, setIsAdminAuth] = useState(() => localStorage.getItem('ec_admin_auth') === 'true');
+  const [mode, setMode] = useState(() => {
+    if (localStorage.getItem('ec_admin_auth') === 'true') return 'admin';
+    if (sessionTable) return 'customer';
+    return 'landing';
+  });
   const [table, setTable] = useState(sessionTable);
-  const [isAdminAuth, setIsAdminAuth] = useState(false);
 
   const [menuItems, setMenuItems] = useState([]);
   const [activeOrders, setActiveOrders] = useState([]);
@@ -307,11 +314,23 @@ export default function App() {
     setMode('landing');
   };
 
+  const adminLoginSuccess = () => {
+    setIsAdminAuth(true);
+    localStorage.setItem('ec_admin_auth', 'true');
+    setMode('admin');
+  };
+
+  const adminLogout = () => {
+    setIsAdminAuth(false);
+    localStorage.removeItem('ec_admin_auth');
+    setMode('landing');
+  };
+
   return (
     <div className="min-h-screen bg-purple-950 font-sans text-slate-100 selection:bg-purple-500">
-      {mode === 'landing' && <LandingView tables={tables} activeOrders={activeOrders} logo={cafeLogo} onJoin={joinTable} onAdminLogin={() => { setIsAdminAuth(true); setMode('admin'); }} />}
+      {mode === 'landing' && <LandingView tables={tables} activeOrders={activeOrders} logo={cafeLogo} onJoin={joinTable} onAdminLogin={adminLoginSuccess} />}
       {mode === 'customer' && <CustomerView tableNumber={table} menuItems={menuItems} activeOrders={activeOrders} onPlaceOrder={placeOrder} onExit={exitTable} />}
-      {mode === 'admin' && isAdminAuth && <AdminDashboard {...{ activeOrders, setActiveOrders, orderHistory, setOrderHistory, completeOrder, cancelOrder, menuItems, setMenuItems, tables, setTables, stockInv, setStockInv, iceInv, setIceInv, cafeLogo, setCafeLogo, db }} onExit={() => { setIsAdminAuth(false); setMode('landing'); }} />}
+      {mode === 'admin' && isAdminAuth && <AdminDashboard {...{ activeOrders, setActiveOrders, orderHistory, setOrderHistory, completeOrder, cancelOrder, menuItems, setMenuItems, tables, setTables, stockInv, setStockInv, iceInv, setIceInv, cafeLogo, setCafeLogo, db }} onExit={adminLogout} />}
     </div>
   );
 }
@@ -433,7 +452,9 @@ function CustomerView({ tableNumber, menuItems, activeOrders, onPlaceOrder, onEx
       <div className="bg-slate-50 w-full max-w-md mx-auto sm:rounded-[2.5rem] sm:shadow-2xl overflow-hidden flex flex-col h-full relative text-slate-800">
         <header className="bg-purple-900 px-4 pt-4 pb-3 text-white shadow-md z-10 shrink-0">
           <div className="flex items-center justify-between mb-3">
-            {onExit ? <button onClick={() => { playSfx('click'); onExit(); }} className="p-2 -ml-2 bg-purple-800 rounded-full flex items-center gap-1 text-xs font-bold"><ChevronLeft className="w-4 h-4" /> Exit</button> : <div className="w-9 h-9" />}
+            {onExit && status !== 'Pending' && status !== 'Preparing' && status !== 'Verifying' ? (
+              <button onClick={() => { playSfx('click'); onExit(); }} className="p-2 -ml-2 bg-purple-800 rounded-full flex items-center gap-1 text-xs font-bold"><ChevronLeft className="w-4 h-4" /> Exit</button>
+            ) : <div className="w-9 h-9" />}
             <div className="bg-purple-950/50 px-4 py-1.5 rounded-full border border-purple-700/50"><h1 className="text-sm font-black tracking-widest uppercase text-purple-200">Table {tableNumber}</h1></div>
             <div className="w-9 h-9" />
           </div>
@@ -519,7 +540,7 @@ function AdminDashboard(p) {
         } else {
           speak(`New Cash on Delivery order for Table ${newOrder.table}.`);
         }
-      }, 1500);
+      }, 1000);
     }
     prevCount.current = p.activeOrders.length;
   }, [p.activeOrders]);
@@ -649,25 +670,25 @@ function MenuTab({ menuItems, db }) {
 
   return (
     <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
-      <div className="p-5 border-b border-slate-200 flex flex-wrap justify-between items-center gap-4 bg-slate-50">
-        <h2 className="text-xl font-black text-slate-800">Menu Catalog ({menuItems.length})</h2>
-        <div className="flex items-center gap-3 w-full md:w-auto">
-          <div className="relative flex-1 md:w-64">
-            <Search className="absolute left-3 top-3.5 w-4 h-4 text-slate-400" />
-            <input type="text" placeholder="Search menu..." value={search} onChange={e => setSearch(e.target.value)} className="w-full bg-white border-2 border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm font-bold outline-none focus:border-purple-600" />
+      <div className="p-4 md:p-5 border-b border-slate-200 flex flex-wrap justify-between items-center gap-3 bg-slate-50">
+        <h2 className="text-lg md:text-xl font-black text-slate-800">Menu Catalog ({menuItems.length})</h2>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <div className="relative flex-1 sm:w-56">
+            <Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
+            <input type="text" placeholder="Search menu..." value={search} onChange={e => setSearch(e.target.value)} className="w-full bg-white border-2 border-slate-200 rounded-xl pl-9 pr-3 py-2 text-sm font-bold outline-none focus:border-purple-600" />
           </div>
-          <button onClick={() => { playSfx('click'); setEdit(null); }} className="bg-purple-700 hover:bg-purple-800 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 shrink-0"><Plus className="w-5 h-5" /> Add Menu</button>
+          <button onClick={() => { playSfx('click'); setEdit(null); }} className="bg-purple-700 hover:bg-purple-800 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-1.5 text-sm shrink-0"><Plus className="w-4 h-4" /> Add Menu</button>
         </div>
       </div>
-      <div className="overflow-x-auto"><table className="w-full text-left min-w-[640px]">
-        <thead><tr className="bg-slate-100 text-slate-500 text-xs uppercase border-b"><th className="p-4 pl-6">Img</th><th className="p-4">Name / Category</th><th className="p-4">Price</th><th className="p-4">Status</th><th className="p-4 pr-6 text-right">Actions</th></tr></thead>
+      <div className="overflow-x-auto"><table className="w-full text-left min-w-[600px]">
+        <thead><tr className="bg-slate-100 text-slate-500 text-xs uppercase border-b"><th className="p-3 pl-6">Img</th><th className="p-3">Name / Category</th><th className="p-3">Price</th><th className="p-3">Status</th><th className="p-3 pr-6 text-right">Actions</th></tr></thead>
         <tbody className="divide-y divide-slate-100">{filteredMenu.map(it => (
           <tr key={it.id} className="hover:bg-slate-50">
-            <td className="p-4 pl-6"><div className="w-12 h-12 bg-slate-200 rounded-xl overflow-hidden flex items-center justify-center">{it.img ? <img src={it.img} alt="" className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-slate-400" />}</div></td>
-            <td className="p-4"><p className="font-bold text-slate-900">{it.name}</p><p className="text-xs text-slate-500">{it.category}</p></td>
-            <td className="p-4 font-black text-purple-700">₹{it.v ? it.v.map(x => x[1]).join(' / ') : it.price}</td>
-            <td className="p-4"><button onClick={() => toggleStock(it)} className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${it.stock ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{it.stock ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}{it.stock ? 'In Stock' : 'Out'}</button></td>
-            <td className="p-4 pr-6 text-right"><div className="flex justify-end gap-2"><button onClick={() => { playSfx('click'); setEdit(it); }} className="p-2 text-slate-400 hover:text-purple-700 bg-slate-50 rounded-xl"><Edit className="w-4 h-4" /></button><DelBtn onDel={() => deleteItem(it.id)} /></div></td>
+            <td className="p-3 pl-6"><div className="w-10 h-10 bg-slate-200 rounded-xl overflow-hidden flex items-center justify-center">{it.img ? <img src={it.img} alt="" className="w-full h-full object-cover" /> : <ImageIcon className="w-4 h-4 text-slate-400" />}</div></td>
+            <td className="p-3"><p className="font-bold text-slate-900 text-sm">{it.name}</p><p className="text-[11px] text-slate-500">{it.category}</p></td>
+            <td className="p-3 font-black text-purple-700 text-sm">₹{it.v ? it.v.map(x => x[1]).join(' / ') : it.price}</td>
+            <td className="p-3"><button onClick={() => toggleStock(it)} className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border ${it.stock ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{it.stock ? <ToggleRight className="w-3.5 h-3.5" /> : <ToggleLeft className="w-3.5 h-3.5" />}{it.stock ? 'In Stock' : 'Out'}</button></td>
+            <td className="p-3 pr-6 text-right"><div className="flex justify-end gap-1.5"><button onClick={() => { playSfx('click'); setEdit(it); }} className="p-2 text-slate-400 hover:text-purple-700 bg-slate-50 rounded-xl"><Edit className="w-4 h-4" /></button><DelBtn onDel={() => deleteItem(it.id)} /></div></td>
           </tr>
         ))}</tbody>
       </table></div>
@@ -713,20 +734,20 @@ function MenuForm({ item, categories, descriptions, onSave, onClose }) {
   );
 }
 
-/* ---------------- INVENTORY TAB (WITHOUT UNITS, RESPONSIVE) ---------------- */
+/* ---------------- INVENTORY TAB ---------------- */
 function InventoryTab({ stockInv, iceInv, db }) {
   const [search, setSearch] = useState('');
   const stockLows = stockInv.filter(i => i.qty <= i.min);
   const iceLows = iceInv.filter(i => i.qty <= i.min);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {stockLows.length > 0 && <div className="bg-red-50 border border-red-200 text-red-800 rounded-2xl p-4 font-bold text-sm flex gap-2"><AlertTriangle className="w-5 h-5 shrink-0"/>{stockLows.map(l => `${l.name} is low`).join('. ')}</div>}
       {iceLows.length > 0 && <div className="bg-orange-50 border border-orange-200 text-orange-800 rounded-2xl p-4 font-bold text-sm flex gap-2"><AlertTriangle className="w-5 h-5 shrink-0"/>Ice Cream Low: {iceLows.map(l => l.name).join(', ')}</div>}
       
       <div className="bg-white rounded-3xl border border-slate-200 p-4 flex items-center gap-3">
         <Search className="w-5 h-5 text-slate-400 ml-2 shrink-0" />
-        <input type="text" placeholder="Search inventory items..." value={search} onChange={e => setSearch(e.target.value)} className="w-full font-bold outline-none text-slate-800 text-sm md:text-base" />
+        <input type="text" placeholder="Search inventory..." value={search} onChange={e => setSearch(e.target.value)} className="w-full font-bold outline-none text-slate-800 text-sm" />
       </div>
 
       <InvSection title="Ice Cream Inventory" icon={<IceCream className="w-5 h-5"/>} items={iceInv} colName="icecream" db={db} prefix="ic" search={search} />
@@ -764,26 +785,26 @@ function InvSection({ title, icon, items, colName, db, prefix, search }) {
   
   return (
     <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
-      <div className="p-5 border-b border-slate-200 flex justify-between items-center bg-slate-50 gap-3">
-        <h2 className="text-lg md:text-xl font-black text-slate-800 flex items-center gap-2 truncate">{icon} {title}</h2>
-        <button onClick={() => { playSfx('click'); setEdit(null); }} className="bg-purple-700 text-white px-4 py-2.5 rounded-xl font-bold flex gap-2 items-center text-sm shrink-0"><Plus className="w-4 h-4" /> Add Item</button>
+      <div className="p-4 md:p-5 border-b border-slate-200 flex justify-between items-center bg-slate-50 gap-3">
+        <h2 className="text-base md:text-xl font-black text-slate-800 flex items-center gap-2 truncate">{icon} {title}</h2>
+        <button onClick={() => { playSfx('click'); setEdit(null); }} className="bg-purple-700 text-white px-4 py-2 rounded-xl font-bold flex gap-1.5 items-center text-xs md:text-sm shrink-0"><Plus className="w-4 h-4" /> Add Item</button>
       </div>
       <div className="overflow-x-auto"><table className="w-full text-left min-w-[500px]">
-        <thead className="bg-slate-100 text-slate-500 text-xs uppercase"><tr><th className="p-4 pl-6">Item</th><th className="p-4">Qty</th><th className="p-4">Expense (₹)</th><th className="p-4">Alert At</th><th className="p-4 text-right pr-6">Actions</th></tr></thead>
+        <thead className="bg-slate-100 text-slate-500 text-xs uppercase"><tr><th className="p-3 pl-6">Item</th><th className="p-3">Qty</th><th className="p-3">Expense (₹)</th><th className="p-3">Alert At</th><th className="p-3 text-right pr-6">Actions</th></tr></thead>
         <tbody className="divide-y divide-slate-100">{filteredItems.map(i => (
           <tr key={i.id} className={i.qty <= i.min ? 'bg-red-50/60' : ''}>
-            <td className="p-4 pl-6 font-bold">{i.name}</td>
-            <td className="p-4"><div className="flex items-center gap-2"><button onClick={() => upd(i.id, i.qty, -1)} className="p-1.5 bg-slate-100 rounded-lg"><Minus className="w-4 h-4"/></button><span className="font-black w-12 text-center">{i.qty}</span><button onClick={() => upd(i.id, i.qty, 1)} className="p-1.5 bg-slate-100 rounded-lg"><Plus className="w-4 h-4"/></button></div></td>
-            <td className="p-4 font-black text-purple-700">₹{i.price || 0}</td>
-            <td className="p-4 font-bold text-slate-500">{i.min}</td>
-            <td className="p-4 pr-6 text-right"><div className="flex justify-end gap-2"><button onClick={() => { playSfx('click'); setEdit(i); }} className="p-2 text-slate-400 bg-slate-50 rounded-xl hover:text-purple-700"><Edit className="w-4 h-4"/></button><DelBtn onDel={() => deleteInv(i.id)} /></div></td>
+            <td className="p-3 pl-6 font-bold text-sm">{i.name}</td>
+            <td className="p-3"><div className="flex items-center gap-1.5"><button onClick={() => upd(i.id, i.qty, -1)} className="p-1 bg-slate-100 rounded-lg"><Minus className="w-3.5 h-3.5"/></button><span className="font-black w-10 text-center text-sm">{i.qty}</span><button onClick={() => upd(i.id, i.qty, 1)} className="p-1 bg-slate-100 rounded-lg"><Plus className="w-3.5 h-3.5"/></button></div></td>
+            <td className="p-3 font-black text-purple-700 text-sm">₹{i.price || 0}</td>
+            <td className="p-3 font-bold text-slate-500 text-sm">{i.min}</td>
+            <td className="p-3 pr-6 text-right"><div className="flex justify-end gap-1.5"><button onClick={() => { playSfx('click'); setEdit(i); }} className="p-2 text-slate-400 bg-slate-50 rounded-xl hover:text-purple-700"><Edit className="w-4 h-4"/></button><DelBtn onDel={() => deleteInv(i.id)} /></div></td>
           </tr>
         ))}
         {filteredItems.length === 0 && <tr><td colSpan="5" className="p-8 text-center font-bold text-slate-400">Empty List</td></tr>}
         </tbody>
       </table></div>
       {edit !== undefined && (
-        <Modal title={edit ? 'Edit Inventory Item' : 'Add Inventory Item'} onClose={() => setEdit(undefined)}>
+        <Modal title={edit ? 'Edit Item' : 'Add Item'} onClose={() => setEdit(undefined)}>
           <div ref={box} className="space-y-3">
             <div>
               <label className="text-xs font-bold text-slate-500 uppercase">Name</label>
@@ -791,8 +812,8 @@ function InvSection({ title, icon, items, colName, db, prefix, search }) {
               <datalist id={`name-list-${prefix}`}>{names.map(n => <option key={n} value={n} />)}</datalist>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><label className="text-xs font-bold text-slate-500 uppercase">Quantity (Number)</label><input name="qty" type="number" defaultValue={edit?.qty ?? 0} className={inpStyle} /></div>
-              <div><label className="text-xs font-bold text-slate-500 uppercase">Expense Price (₹)</label><input name="price" type="number" defaultValue={edit?.price ?? 0} className={inpStyle} /></div>
+              <div><label className="text-xs font-bold text-slate-500 uppercase">Quantity</label><input name="qty" type="number" defaultValue={edit?.qty ?? 0} className={inpStyle} /></div>
+              <div><label className="text-xs font-bold text-slate-500 uppercase">Expense (₹)</label><input name="price" type="number" defaultValue={edit?.price ?? 0} className={inpStyle} /></div>
             </div>
             <div><label className="text-xs font-bold text-slate-500 uppercase">Low Alert Limit</label><input name="min" type="number" defaultValue={edit?.min ?? 10} className={inpStyle} /></div>
             <button type="button" onClick={save} className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-4 rounded-xl mt-2">Save Item</button>
@@ -864,7 +885,7 @@ function QRTab({ logo }) {
   );
 }
 
-/* ---------------- REVENUE & PROFIT/LOSS SECTION (RESPONSIVE) ---------------- */
+/* ---------------- REVENUE & PROFIT/LOSS SECTION ---------------- */
 function HistoryTab({ history, stockInv, iceInv, db }) {
   const [from, setFrom] = useState(''); const [to, setTo] = useState('');
   const rows = useMemo(() => history.filter(o => { const d = new Date(o.completedAt || o.time); const ymdStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); return (!from || ymdStr >= from) && (!to || ymdStr <= to); }), [history, from, to]);
@@ -886,17 +907,17 @@ function HistoryTab({ history, stockInv, iceInv, db }) {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-3xl border border-slate-200 p-5 flex flex-wrap gap-4 items-end">
+      <div className="bg-white rounded-3xl border border-slate-200 p-4 md:p-5 flex flex-wrap gap-4 items-end">
         <div><label className="text-xs font-bold text-slate-500 uppercase">From date</label><input type="date" value={from} onChange={e => { playSfx('click'); setFrom(e.target.value); }} className={inpStyle + ' py-2'} /></div>
         <div><label className="text-xs font-bold text-slate-500 uppercase">To date</label><input type="date" value={to} onChange={e => { playSfx('click'); setTo(e.target.value); }} className={inpStyle + ' py-2'} /></div>
-        <button onClick={() => { playSfx('click'); setFrom(''); setTo(''); }} className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 font-bold text-sm hover:bg-slate-200">Clear</button>
+        <button onClick={() => { playSfx('click'); setFrom(''); setTo(''); }} className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-bold text-sm hover:bg-slate-200">Clear</button>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-purple-800 rounded-3xl p-6 text-white"><p className="text-purple-200 font-bold text-sm mb-1">Total Sales (Revenue)</p><h2 className="text-2xl md:text-3xl font-black">₹{totalRevenue}</h2></div>
-        <div className="bg-amber-600 rounded-3xl p-6 text-white"><p className="text-amber-100 font-bold text-sm mb-1">Total Inventory Expense</p><h2 className="text-2xl md:text-3xl font-black">₹{totalExpense}</h2></div>
-        <div className={`rounded-3xl p-6 text-white ${netProfitLoss >= 0 ? 'bg-green-600' : 'bg-red-600'}`}><p className="text-white/80 font-bold text-sm mb-1">Net Profit / Loss</p><h2 className="text-2xl md:text-3xl font-black">₹{netProfitLoss}</h2></div>
-        <div className="bg-white rounded-3xl p-4 border border-slate-200 flex flex-col justify-center"><button onClick={dlCsv} disabled={!rows.length} className="bg-indigo-600 text-white font-black py-3 rounded-xl flex items-center justify-center gap-2 disabled:opacity-40 text-sm"><Download className="w-4 h-4"/> Export Report</button></div>
+        <div className="bg-purple-800 rounded-3xl p-5 text-white"><p className="text-purple-200 font-bold text-xs uppercase mb-1">Total Sales</p><h2 className="text-2xl font-black">₹{totalRevenue}</h2></div>
+        <div className="bg-amber-600 rounded-3xl p-5 text-white"><p className="text-amber-100 font-bold text-xs uppercase mb-1">Total Expense</p><h2 className="text-2xl font-black">₹{totalExpense}</h2></div>
+        <div className={`rounded-3xl p-5 text-white ${netProfitLoss >= 0 ? 'bg-green-600' : 'bg-red-600'}`}><p className="text-white/80 font-bold text-xs uppercase mb-1">Net Profit / Loss</p><h2 className="text-2xl font-black">₹{netProfitLoss}</h2></div>
+        <div className="bg-white rounded-3xl p-4 border border-slate-200 flex flex-col justify-center"><button onClick={dlCsv} disabled={!rows.length} className="bg-indigo-600 text-white font-black py-2.5 rounded-xl flex items-center justify-center gap-2 disabled:opacity-40 text-xs"><Download className="w-4 h-4"/> Export Report</button></div>
       </div>
 
       <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden">
@@ -904,26 +925,26 @@ function HistoryTab({ history, stockInv, iceInv, db }) {
           <table className="w-full text-left min-w-[700px]">
             <thead className="bg-slate-50 text-slate-400 text-xs uppercase">
               <tr>
-                <th className="p-4 pl-6">Order</th>
-                <th className="p-4">Date</th>
-                <th className="p-4">Table / Items</th>
-                <th className="p-4">Pay Mode</th>
-                <th className="p-4 text-right">Amount</th>
-                <th className="p-4 pr-6 text-right">Action</th>
+                <th className="p-3 pl-6">Order</th>
+                <th className="p-3">Date</th>
+                <th className="p-3">Table / Items</th>
+                <th className="p-3">Pay Mode</th>
+                <th className="p-3 text-right">Amount</th>
+                <th className="p-3 pr-6 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {rows.map(o => (
                 <tr key={o.id} className="hover:bg-slate-50">
-                  <td className="p-4 pl-6 font-mono font-bold text-slate-600">#{o.id}</td>
-                  <td className="p-4 text-sm text-slate-500 whitespace-nowrap">{new Date(o.completedAt || o.time).toLocaleString()}</td>
-                  <td className="p-4"><p className="font-bold">Table {o.table}</p><p className="text-xs text-slate-500">{o.items.map(i => `${i.qty}x ${i.name}`).join(', ')}</p></td>
-                  <td className="p-4 whitespace-nowrap"><span className={`px-2 py-1 rounded-md text-xs font-bold ${o.payment === 'Online' ? 'bg-indigo-50 text-indigo-700' : 'bg-amber-50 text-amber-700'}`}>{o.payment}</span></td>
-                  <td className="p-4 font-black text-purple-700 text-right text-lg whitespace-nowrap">₹{o.total}</td>
-                  <td className="p-4 pr-6 text-right"><DelBtn onDel={() => deleteHistory(o.id)} /></td>
+                  <td className="p-3 pl-6 font-mono font-bold text-slate-600 text-sm">#{o.id}</td>
+                  <td className="p-3 text-xs text-slate-500 whitespace-nowrap">{new Date(o.completedAt || o.time).toLocaleString()}</td>
+                  <td className="p-3"><p className="font-bold text-sm">Table {o.table}</p><p className="text-[11px] text-slate-500">{o.items.map(i => `${i.qty}x ${i.name}`).join(', ')}</p></td>
+                  <td className="p-3 whitespace-nowrap"><span className={`px-2 py-1 rounded-md text-[11px] font-bold ${o.payment === 'Online' ? 'bg-indigo-50 text-indigo-700' : 'bg-amber-50 text-amber-700'}`}>{o.payment}</span></td>
+                  <td className="p-3 font-black text-purple-700 text-right text-base whitespace-nowrap">₹{o.total}</td>
+                  <td className="p-3 pr-6 text-right"><DelBtn onDel={() => deleteHistory(o.id)} /></td>
                 </tr>
               ))}
-              {rows.length === 0 && <tr><td colSpan="6" className="p-10 text-center font-bold text-slate-400">No history found.</td></tr>}
+              {rows.length === 0 && <tr><td colSpan="6" className="p-8 text-center font-bold text-slate-400">No history found.</td></tr>}
             </tbody>
           </table>
         </div>
