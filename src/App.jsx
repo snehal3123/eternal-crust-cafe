@@ -227,7 +227,6 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    // Using 'eternal_menu_v2' collection to ensure fresh clean loading without old 'p1' conflicts
     const unsubMenu = onSnapshot(collection(db, 'eternal_menu_v2'), (snap) => {
       if (snap.empty) {
         initialMenu.forEach(item => setDoc(doc(db, 'eternal_menu_v2', item.id), item));
@@ -647,7 +646,7 @@ function AdminCol({ title, icon, list, bg, text, action, color, onAction, onCanc
   );
 }
 
-/* ---------------- MENU CRUD TAB WITH SEARCH ---------------- */
+/* ---------------- MENU CRUD TAB WITH STATE FORM ---------------- */
 function MenuTab({ menuItems, db }) {
   const [edit, setEdit] = useState(undefined);
   const [search, setSearch] = useState('');
@@ -665,10 +664,12 @@ function MenuTab({ menuItems, db }) {
     }
     setEdit(undefined);
   };
+
   const toggleStock = async (it) => {
     playSfx('click');
     await updateDoc(doc(db, 'eternal_menu_v2', it.id), { stock: !it.stock });
   };
+
   const deleteItem = async (id) => {
     playSfx('del');
     await deleteDoc(doc(db, 'eternal_menu_v2', id));
@@ -686,7 +687,7 @@ function MenuTab({ menuItems, db }) {
             <Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
             <input type="text" placeholder="Search menu..." value={search} onChange={e => setSearch(e.target.value)} className="w-full bg-white border-2 border-slate-200 rounded-xl pl-9 pr-3 py-2 text-sm font-bold outline-none focus:border-purple-600" />
           </div>
-          <button onClick={() => { playSfx('click'); setEdit(null); }} className="bg-purple-700 hover:bg-purple-800 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-1.5 text-sm shrink-0"><Plus className="w-4 h-4" /> Add Menu</button>
+          <button onClick={() => { playSfx('click'); setEdit({ name: '', category: 'Pizza', price: 100, desc: '', v: null, stock: true }); }} className="bg-purple-700 hover:bg-purple-800 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-1.5 text-sm shrink-0"><Plus className="w-4 h-4" /> Add Menu</button>
         </div>
       </div>
       <div className="overflow-x-auto"><table className="w-full text-left min-w-[600px]">
@@ -707,38 +708,54 @@ function MenuTab({ menuItems, db }) {
 }
 
 function MenuForm({ item, categories, descriptions, onSave, onClose }) {
-  const [img, setImg] = useState(item ? item.img : ''); const fileRef = useRef(null); const box = useRef(null);
-  const submit = () => {
-    const f = { get: (n) => box.current.querySelector(`[name="${n}"]`)?.value || '' };
-    if (!f.get('name').trim() || !f.get('category').trim()) return playSfx('error');
-    const vs = (f.get('v') || '').split(',').map(s => s.trim()).filter(Boolean).map(s => { const [l, p] = s.split(':'); return [l.trim(), Number(p)]; }).filter(x => x[0] && x[1]);
-    onSave({ name: f.get('name'), category: f.get('category'), desc: f.get('desc'), img, price: vs.length ? vs[0][1] : Number(f.get('price')), v: vs.length > 1 ? vs : null, stock: item ? item.stock : true });
+  const [name, setName] = useState(item?.name || '');
+  const [category, setCategory] = useState(item?.category || 'Pizza');
+  const [price, setPrice] = useState(item?.price || 100);
+  const [desc, setDesc] = useState(item?.desc || '');
+  const [variants, setVariants] = useState(item?.v ? item.v.map(x => x.join(':')).join(', ') : '');
+  const [img, setImg] = useState(item?.img || '');
+  const fileRef = useRef(null);
+
+  const submit = (e) => {
+    e.preventDefault();
+    if (!name.trim() || !category.trim()) return playSfx('error');
+    const vs = variants.split(',').map(s => s.trim()).filter(Boolean).map(s => { const [l, p] = s.split(':'); return [l.trim(), Number(p)]; }).filter(x => x[0] && x[1]);
+    onSave({
+      name: name.trim(),
+      category: category.trim(),
+      desc: desc.trim(),
+      img,
+      price: vs.length ? vs[0][1] : Number(price),
+      v: vs.length > 1 ? vs : null,
+      stock: item ? item.stock : true
+    });
   };
+
   return (
-    <Modal title={item ? 'Edit Menu Item' : 'New Menu Item'} onClose={onClose}>
-      <div ref={box} className="space-y-3">
-        <div><label className="text-xs font-bold text-slate-500 uppercase">Item name</label><input name="name" defaultValue={item?.name} className={inpStyle} /></div>
+    <Modal title={item?.id ? 'Edit Menu Item' : 'New Menu Item'} onClose={onClose}>
+      <form onSubmit={submit} className="space-y-3">
+        <div><label className="text-xs font-bold text-slate-500 uppercase">Item name</label><input value={name} onChange={e => setName(e.target.value)} className={inpStyle} required /></div>
         <div className="grid grid-cols-2 gap-3">
-          <div><label className="text-xs font-bold text-slate-500 uppercase">Price (₹)</label><input name="price" type="number" defaultValue={item?.price} className={inpStyle} /></div>
+          <div><label className="text-xs font-bold text-slate-500 uppercase">Price (₹)</label><input type="number" value={price} onChange={e => setPrice(e.target.value)} className={inpStyle} required /></div>
           <div>
             <label className="text-xs font-bold text-slate-500 uppercase">Category</label>
-            <input name="category" list="cat-list" defaultValue={item?.category} className={inpStyle} />
+            <input list="cat-list" value={category} onChange={e => setCategory(e.target.value)} className={inpStyle} required />
             <datalist id="cat-list">{categories.map(c => <option key={c} value={c} />)}</datalist>
           </div>
         </div>
         <div>
           <label className="text-xs font-bold text-slate-500 uppercase">Description (Optional)</label>
-          <input name="desc" list="desc-list" defaultValue={item?.desc} className={inpStyle} />
+          <input list="desc-list" value={desc} onChange={e => setDesc(e.target.value)} className={inpStyle} />
           <datalist id="desc-list">{descriptions.map(d => <option key={d} value={d} />)}</datalist>
         </div>
-        <div><label className="text-xs font-bold text-slate-500 uppercase">Sizes (opt) e.g. Regular:149, Large:189</label><input name="v" defaultValue={item?.v ? item.v.map(x => x.join(':')).join(', ') : ''} className={inpStyle + ' text-sm'} /></div>
+        <div><label className="text-xs font-bold text-slate-500 uppercase">Sizes (opt) e.g. Regular:149, Large:189</label><input value={variants} onChange={e => setVariants(e.target.value)} className={inpStyle + ' text-sm'} /></div>
         <div>
           <label className="text-xs font-bold text-slate-500 uppercase">Photo (Optional)</label>
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={async (e) => { if (e.target.files[0]) { playSfx('save'); setImg(await readImg(e.target.files[0])); } }} />
           <div className="flex gap-3 items-center mt-1"><div className="w-16 h-16 bg-slate-100 rounded-xl overflow-hidden flex justify-center items-center">{img ? <img src={img} className="w-full h-full object-cover" /> : <ImageIcon className="w-6 h-6 text-slate-300" />}</div><button type="button" onClick={() => { playSfx('click'); fileRef.current.click(); }} className="bg-purple-100 text-purple-800 font-bold px-4 py-2 rounded-xl flex items-center gap-2"><Upload className="w-4 h-4"/> Upload Image</button></div>
         </div>
-        <button type="button" onClick={submit} className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-4 rounded-xl mt-4">Save Item</button>
-      </div>
+        <button type="submit" className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-4 rounded-xl mt-4">Save Item</button>
+      </form>
     </Modal>
   );
 }
@@ -766,7 +783,7 @@ function InventoryTab({ stockInv, iceInv, db }) {
 }
 
 function InvSection({ title, icon, items, colName, db, prefix, search }) {
-  const [edit, setEdit] = useState(undefined); const box = useRef(null);
+  const [edit, setEdit] = useState(undefined);
 
   const filteredItems = useMemo(() => {
     return items.filter(i => i.name.toLowerCase().includes(search.toLowerCase()));
@@ -776,18 +793,27 @@ function InvSection({ title, icon, items, colName, db, prefix, search }) {
     playSfx(d > 0 ? 'add' : 'remove');
     await updateDoc(doc(db, colName, id), { qty: Math.max(0, qty + d) });
   };
-  const save = async () => {
-    const f = { get: (n) => box.current.querySelector(`[name="${n}"]`)?.value || '' };
-    if (!f.get('name')) return playSfx('error');
+
+  const save = (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const name = form.name.value;
+    const qty = Number(form.qty.value);
+    const price = Number(form.price.value || 0);
+    const min = Number(form.min.value || 10);
+
+    if (!name) return playSfx('error');
     playSfx('save');
-    const data = { name: f.get('name'), qty: Number(f.get('qty')), price: Number(f.get('price') || 0), min: Number(f.get('min') || 10) };
+    const data = { name, qty, price, min };
+
     if (edit && edit.id) {
-      await updateDoc(doc(db, colName, edit.id), data);
+      updateDoc(doc(db, colName, edit.id), data);
     } else {
-      await setDoc(doc(db, colName, prefix + Date.now()), data);
+      setDoc(doc(db, colName, prefix + Date.now()), data);
     }
     setEdit(undefined);
   };
+
   const deleteInv = async (id) => { playSfx('del'); await deleteDoc(doc(db, colName, id)); };
 
   const names = [...new Set(items.map(i => i.name).filter(Boolean))];
@@ -796,7 +822,7 @@ function InvSection({ title, icon, items, colName, db, prefix, search }) {
     <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
       <div className="p-4 md:p-5 border-b border-slate-200 flex justify-between items-center bg-slate-50 gap-3">
         <h2 className="text-base md:text-xl font-black text-slate-800 flex items-center gap-2 truncate">{icon} {title}</h2>
-        <button onClick={() => { playSfx('click'); setEdit(null); }} className="bg-purple-700 text-white px-4 py-2.5 rounded-xl font-bold flex gap-1.5 items-center text-xs md:text-sm shrink-0"><Plus className="w-4 h-4" /> Add Item</button>
+        <button onClick={() => { playSfx('click'); setEdit({ name: '', qty: 0, price: 0, min: 10 }); }} className="bg-purple-700 text-white px-4 py-2.5 rounded-xl font-bold flex gap-1.5 items-center text-xs md:text-sm shrink-0"><Plus className="w-4 h-4" /> Add Item</button>
       </div>
       <div className="overflow-x-auto"><table className="w-full text-left min-w-[500px]">
         <thead className="bg-slate-100 text-slate-500 text-xs uppercase"><tr><th className="p-3 pl-6">Item</th><th className="p-3">Qty</th><th className="p-3">Expense (₹)</th><th className="p-3">Alert At</th><th className="p-3 text-right pr-6">Actions</th></tr></thead>
@@ -813,20 +839,20 @@ function InvSection({ title, icon, items, colName, db, prefix, search }) {
         </tbody>
       </table></div>
       {edit !== undefined && (
-        <Modal title={edit ? 'Edit Item' : 'Add Item'} onClose={() => setEdit(undefined)}>
-          <div ref={box} className="space-y-3">
+        <Modal title={edit?.id ? 'Edit Item' : 'Add Item'} onClose={() => setEdit(undefined)}>
+          <form onSubmit={save} className="space-y-3">
             <div>
               <label className="text-xs font-bold text-slate-500 uppercase">Name</label>
-              <input name="name" list={`name-list-${prefix}`} defaultValue={edit?.name} className={inpStyle} />
+              <input name="name" list={`name-list-${prefix}`} defaultValue={edit?.name} className={inpStyle} required />
               <datalist id={`name-list-${prefix}`}>{names.map(n => <option key={n} value={n} />)}</datalist>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><label className="text-xs font-bold text-slate-500 uppercase">Quantity</label><input name="qty" type="number" defaultValue={edit?.qty ?? 0} className={inpStyle} /></div>
-              <div><label className="text-xs font-bold text-slate-500 uppercase">Expense (₹)</label><input name="price" type="number" defaultValue={edit?.price ?? 0} className={inpStyle} /></div>
+              <div><label className="text-xs font-bold text-slate-500 uppercase">Quantity</label><input name="qty" type="number" defaultValue={edit?.qty ?? 0} className={inpStyle} required /></div>
+              <div><label className="text-xs font-bold text-slate-500 uppercase">Expense (₹)</label><input name="price" type="number" defaultValue={edit?.price ?? 0} className={inpStyle} required /></div>
             </div>
-            <div><label className="text-xs font-bold text-slate-500 uppercase">Low Alert Limit</label><input name="min" type="number" defaultValue={edit?.min ?? 10} className={inpStyle} /></div>
-            <button type="button" onClick={save} className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-4 rounded-xl mt-2">Save Item</button>
-          </div>
+            <div><label className="text-xs font-bold text-slate-500 uppercase">Low Alert Limit</label><input name="min" type="number" defaultValue={edit?.min ?? 10} className={inpStyle} required /></div>
+            <button type="submit" className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-4 rounded-xl mt-2">Save Item</button>
+          </form>
         </Modal>
       )}
     </div>
