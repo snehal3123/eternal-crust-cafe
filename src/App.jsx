@@ -5,6 +5,10 @@ import {
   CreditCard, Banknote, X, History, Download, Image as ImageIcon, Package, AlertTriangle, Upload, IceCream, Lock, Eye, EyeOff, Settings, Volume2, VolumeX, Mic
 } from 'lucide-react';
 
+// --- FIREBASE INITIALIZATION AT TOP LEVEL ---
+import { initializeApp } from "firebase/app";
+import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc } from "firebase/firestore";
+
 /* ---------------- AUDIO & VOICE ENGINE ---------------- */
 let AC = null;
 let SOUND_ENABLED = true;
@@ -57,7 +61,6 @@ const readImg = (f) => new Promise((res) => {
 
 // Full Menu matching the printed menu cards
 const initialMenu = [
-  // Pizza
   { id: 'p1', category: 'Pizza', name: 'Small Pizza', price: 139, stock: true },
   { id: 'p2', category: 'Pizza', name: 'Classic Margarita Pizza', price: 149, v: [['Regular', 149], ['Large', 189]], stock: true },
   { id: 'p3', category: 'Pizza', name: 'Paneer Mushroom Pizza', price: 169, v: [['Regular', 169], ['Large', 189]], stock: true },
@@ -71,12 +74,10 @@ const initialMenu = [
   { id: 'p11', category: 'Pizza', name: 'BBQ Paneer Pizza', price: 209, v: [['Regular', 209], ['Large', 239]], stock: true },
   { id: 'p12', category: 'Pizza', name: 'Eternal Crust Special Pizza', price: 219, v: [['Regular', 219], ['Large', 249]], stock: true },
 
-  // Garlic Bread
   { id: 'gb1', category: 'Garlic Bread', name: 'Classic Garlic Bread', price: 99, stock: true },
   { id: 'gb2', category: 'Garlic Bread', name: 'Cheese Chilli Garlic Bread', price: 109, stock: true },
   { id: 'gb3', category: 'Garlic Bread', name: 'Cheese Corn Garlic Bread', price: 109, stock: true },
 
-  // Pasta
   { id: 'pa1', category: 'Pasta', name: 'Penne Arrabiata Pasta', price: 139, stock: true },
   { id: 'pa2', category: 'Pasta', name: 'Alfredo Pasta', price: 139, stock: true },
   { id: 'pa3', category: 'Pasta', name: 'Mamma Rosa Pasta', price: 139, stock: true },
@@ -84,14 +85,12 @@ const initialMenu = [
   { id: 'pa5', category: 'Pasta', name: 'Mushroom Pasta', price: 169, stock: true },
   { id: 'pa6', category: 'Pasta', name: 'Paneer Tikka Pasta', price: 169, stock: true },
 
-  // Fries
   { id: 'f1', category: 'Fries', name: 'Classic Fries', price: 79, stock: true },
   { id: 'f2', category: 'Fries', name: 'Peri Peri Fries', price: 89, stock: true },
   { id: 'f3', category: 'Fries', name: 'Schezwan French Fries', price: 99, stock: true },
   { id: 'f4', category: 'Fries', name: 'Chilli Garlic Fries', price: 109, stock: true },
   { id: 'f5', category: 'Fries', name: 'Cheese Loaded Fries', price: 119, stock: true },
 
-  // Sandwich
   { id: 's1', category: 'Sandwich', name: 'Vegetable Sandwich', price: 69, stock: true },
   { id: 's2', category: 'Sandwich', name: 'Russian Salad Sandwich', price: 79, stock: true },
   { id: 's3', category: 'Sandwich', name: 'Mumbai Club Sandwich', price: 89, stock: true },
@@ -101,7 +100,6 @@ const initialMenu = [
   { id: 's7', category: 'Sandwich', name: 'Paneer Tikka Grill Sandwich', price: 149, stock: true },
   { id: 's8', category: 'Sandwich', name: 'Mushroom Cheese Grill Sandwich', price: 149, stock: true },
 
-  // Maggie
   { id: 'mg1', category: 'Maggie', name: 'Masala Maggie', price: 49, stock: true },
   { id: 'mg2', category: 'Maggie', name: 'Butter Maggie', price: 59, stock: true },
   { id: 'mg3', category: 'Maggie', name: 'Vegetable Maggie', price: 69, stock: true },
@@ -109,7 +107,6 @@ const initialMenu = [
   { id: 'mg5', category: 'Maggie', name: 'Paneer Vegetable Maggie', price: 89, stock: true },
   { id: 'mg6', category: 'Maggie', name: 'Paneer Maggie', price: 89, stock: true },
 
-  // Panini
   { id: 'pn1', category: 'Panini', name: 'Classic Panini', price: 129, stock: true },
   { id: 'pn2', category: 'Panini', name: 'Mix Vegetable Panini', price: 139, stock: true },
   { id: 'pn3', category: 'Panini', name: 'Schezwan Panini', price: 149, stock: true },
@@ -117,38 +114,32 @@ const initialMenu = [
   { id: 'pn5', category: 'Panini', name: 'Corn Cheese Chilli Panini', price: 169, stock: true },
   { id: 'pn6', category: 'Panini', name: 'Corn Schezwan Cheese Chilli Panini', price: 179, stock: true },
 
-  // Burger
   { id: 'b1', category: 'Burger', name: 'Vegetable Burger', price: 89, stock: true },
   { id: 'b2', category: 'Burger', name: 'Vegetable Cheese Burger', price: 109, stock: true },
   { id: 'b3', category: 'Burger', name: 'Paneer Tikka Crispy Burger', price: 149, stock: true },
   { id: 'b4', category: 'Burger', name: 'Cheese Burst Burger', price: 179, stock: true },
   { id: 'b5', category: 'Burger', name: 'Maharaja Burger', price: 189, stock: true },
 
-  // Momos
   { id: 'mo1', category: 'Momos', name: 'Vegetable Momos', price: 99, stock: true },
   { id: 'mo2', category: 'Momos', name: 'Schezwan Momos', price: 119, stock: true },
   { id: 'mo3', category: 'Momos', name: 'Mushroom Momos', price: 139, stock: true },
   { id: 'mo4', category: 'Momos', name: 'Paneer Momos', price: 159, stock: true },
   { id: 'mo5', category: 'Momos', name: 'Kurkure Momos', price: 159, stock: true },
 
-  // Frankie
   { id: 'fr1', category: 'Frankie', name: 'Noodles Frankie', price: 79, stock: true },
   { id: 'fr2', category: 'Frankie', name: 'Classic Frankie', price: 79, stock: true },
   { id: 'fr3', category: 'Frankie', name: 'Paneer Tikka Frankie', price: 129, stock: true },
   { id: 'fr4', category: 'Frankie', name: 'Paneer Mushroom Frankie', price: 139, stock: true },
   { id: 'fr5', category: 'Frankie', name: 'Baby Corn Cheese Frankie', price: 139, stock: true },
 
-  // Combos
   { id: 'co1', category: 'Combos', name: 'Pizza Combo', price: 359, desc: '1 Regular Pizza, 1 Classic Garlic Bread, Peri Peri Fries, Coke (500ml)', stock: true },
   { id: 'co2', category: 'Combos', name: 'Burger Combo', price: 299, desc: '1 Veg Burger, 1 Classic Garlic Bread, Peri Peri Fries, Coke (500ml)', stock: true },
 
-  // Beverages
   { id: 'bev1', category: 'Beverages', name: 'Hot Tea', price: 19, stock: true },
   { id: 'bev2', category: 'Beverages', name: 'Hot Coffee', price: 29, stock: true },
   { id: 'bev3', category: 'Beverages', name: 'Hot Chocolate', price: 69, stock: true },
   { id: 'bev4', category: 'Beverages', name: 'Thick Cold Coffee', price: 79, stock: true },
 
-  // Waffles
   { id: 'wf1', category: 'Waffles', name: 'Classic Waffle', price: 89, stock: true },
   { id: 'wf2', category: 'Waffles', name: 'Chocolate Waffle', price: 99, stock: true },
   { id: 'wf3', category: 'Waffles', name: 'Ice Cream Waffle', price: 119, stock: true },
@@ -156,14 +147,11 @@ const initialMenu = [
   { id: 'wf5', category: 'Waffles', name: 'Banana Waffle', price: 109, stock: true },
   { id: 'wf6', category: 'Waffles', name: 'Nutella Waffle', price: 109, stock: true },
 
-  // Desserts
   { id: 'ds1', category: 'Desserts', name: 'Sizzling Brownie', price: 199, stock: true },
 
-  // Scoop Ice Cream
   { id: 'sc1', category: 'Scoop Ice Cream', name: '1 Scoop', price: 59, stock: true },
   { id: 'sc2', category: 'Scoop Ice Cream', name: '2 Scoops', price: 99, stock: true },
 
-  // Mocktails
   { id: 'mk1', category: 'Mocktails', name: 'Ice Honey Lime Soda', price: 99, stock: true },
   { id: 'mk2', category: 'Mocktails', name: 'Strawberry Peach Soda', price: 99, stock: true },
   { id: 'mk3', category: 'Mocktails', name: 'Orange Ice Soda', price: 99, stock: true },
@@ -171,7 +159,6 @@ const initialMenu = [
   { id: 'mk5', category: 'Mocktails', name: 'Mint Mojito', price: 109, stock: true },
   { id: 'mk6', category: 'Mocktails', name: 'Black Current Mojito', price: 109, stock: true },
 
-  // Thick Shakes
   { id: 'ts1', category: 'Thick Shakes', name: 'Chocolate Thick Milkshake', price: 149, stock: true },
   { id: 'ts2', category: 'Thick Shakes', name: 'Mango Thick Milkshake', price: 149, stock: true },
   { id: 'ts3', category: 'Thick Shakes', name: 'Strawberry Thick Milkshake', price: 149, stock: true },
@@ -179,7 +166,6 @@ const initialMenu = [
   { id: 'ts5', category: 'Thick Shakes', name: 'Kitkat Thick Milkshake', price: 149, stock: true },
   { id: 'ts6', category: 'Thick Shakes', name: 'Brownie Thick Milkshake', price: 169, stock: true },
 
-  // Lattes
   { id: 'lt1', category: 'Lattes', name: 'Spanish Ice Latte', price: 159, stock: true },
   { id: 'lt2', category: 'Lattes', name: 'Ice Mocha', price: 159, stock: true },
   { id: 'lt3', category: 'Lattes', name: 'Ice Caramel Latte', price: 159, stock: true },
@@ -192,6 +178,20 @@ const initialMenu = [
 const initialStock = [{ id: 'i1', name: 'Pizza Base', qty: 40, unit: 'pcs', min: 10 }, { id: 'i2', name: 'Burger Buns', qty: 30, unit: 'pcs', min: 10 }];
 const initialIceCream = [{ id: 'ic1', name: 'Vanilla', qty: 50, unit: 'scoops', min: 10 }, { id: 'ic2', name: 'Chocolate', qty: 30, unit: 'scoops', min: 10 }];
 const initialTables = Array.from({ length: 15 }, (_, i) => ({ id: `t${i + 1}`, name: `${i + 1}` }));
+
+/* ---------------- FIREBASE CONFIG ---------------- */
+const firebaseConfig = {
+  apiKey: "AIzaSyAsmMqePWXD27z7EMAOUetSC5HqV03ScpM",
+  authDomain: "eternalcrust.firebaseapp.com",
+  projectId: "eternalcrust",
+  storageBucket: "eternalcrust.firebasestorage.app",
+  messagingSenderId: "261216829451",
+  appId: "1:261216829451:web:325aaac3d97a5a9280070e",
+  measurementId: "G-2EWDLMFX8K"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
 /* ---------------- MAIN APP ---------------- */
 export default function App() {
@@ -207,28 +207,6 @@ export default function App() {
   const [stockInv, setStockInv] = useState([]);
   const [iceInv, setIceInv] = useState([]);
   const [cafeLogo, setCafeLogo] = useState('');
-
-  // Firestore Realtime Synchronization
-  import_db_listeners: useEffect(() => {
-    // We can simulate or use Firebase if configured. Here we use full real-time snapshot sync.
-  }, []);
-
-  // Let's integrate Firestore initialization safely
-  import { initializeApp } from "firebase/app";
-  import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc } from "firebase/firestore";
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyAsmMqePWXD27z7EMAOUetSC5HqV03ScpM",
-    authDomain: "eternalcrust.firebaseapp.com",
-    projectId: "eternalcrust",
-    storageBucket: "eternalcrust.firebasestorage.app",
-    messagingSenderId: "261216829451",
-    appId: "1:261216829451:web:325aaac3d97a5a9280070e",
-    measurementId: "G-2EWDLMFX8K"
-  };
-
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
 
   useEffect(() => {
     const unsubMenu = onSnapshot(collection(db, 'menu'), (snap) => {
@@ -280,7 +258,6 @@ export default function App() {
     };
   }, []);
 
-  // Enable audio on first interaction
   useEffect(() => {
     const unlock = () => { playSfx('click'); document.removeEventListener('click', unlock); };
     document.addEventListener('click', unlock);
@@ -288,7 +265,7 @@ export default function App() {
   }, []);
 
   const placeOrder = async (tbl, cart, total, payment) => {
-    const numericId = Math.floor(10000 + Math.random() * 90000).toString(); // Pure numeric ID
+    const numericId = Math.floor(10000 + Math.random() * 90000).toString();
     const newOrder = { id: numericId, table: tbl, items: cart, total, payment, status: payment === 'Online' ? 'Verifying' : 'Pending', time: Date.now() };
     await setDoc(doc(db, 'orders', numericId), newOrder);
     playSfx('success');
@@ -346,19 +323,16 @@ function DelBtn({ onDel }) {
   return <button onClick={() => { playSfx('click'); if (a) onDel(); else setA(true); }} className={`p-2 rounded-xl transition-colors text-xs font-black ${a ? 'bg-red-600 text-white' : 'bg-slate-50 text-slate-400 hover:text-red-600 hover:bg-red-50'}`}>{a ? 'Sure?' : <Trash2 className="w-4 h-4" />}</button>;
 }
 
-/* ---------------- LANDING VIEW (NUMERIC SORTED TABLES + ALREADY BOOKED CHECK) ---------------- */
+/* ---------------- LANDING VIEW ---------------- */
 function LandingView({ tables, activeOrders, logo, onJoin, onAdminLogin }) {
   const [showLogin, setShowLogin] = useState(false);
   const [wi, setWi] = useState(0);
 
-  // Numerically sorted tables (1, 2, 3... 10, 11...)
   const sortedTables = useMemo(() => {
     return [...tables].sort((a, b) => (parseInt(a.name) || 0) - (parseInt(b.name) || 0));
   }, [tables]);
 
   const currentTable = sortedTables[wi] || { name: '1' };
-  
-  // Check if this table currently has an active order (is booked)
   const isBooked = activeOrders.some(o => o.table === String(currentTable.name) && o.status !== 'Completed');
 
   return (
@@ -422,16 +396,15 @@ function AdminLoginModal({ onClose, onSuccess }) {
   );
 }
 
-/* ---------------- CUSTOMER VIEW (WITH LIVE STATUS & VOICE) ---------------- */
+/* ---------------- CUSTOMER VIEW ---------------- */
 function CustomerView({ tableNumber, menuItems, activeOrders, onPlaceOrder, onExit }) {
   const [cart, setCart] = useState([]); const [checkout, setCheckout] = useState(false);
   const cats = [...new Set(menuItems.map(i => i.category))]; const [activeCat, setActiveCat] = useState(cats[0]);
   const total = cart.reduce((s, c) => s + c.price * c.qty, 0); const count = cart.reduce((s, c) => s + c.qty, 0);
 
   const tableOrder = activeOrders.find(o => o.table === String(tableNumber));
-  const status = tableOrder ? tableOrder.status : null; // Verifying, Pending, Preparing, Ready
+  const status = tableOrder ? tableOrder.status : null;
 
-  // Voice announcement when order is ready
   const prevStatus = useRef(status);
   useEffect(() => {
     if (prevStatus.current !== 'Ready' && status === 'Ready') {
@@ -457,7 +430,6 @@ function CustomerView({ tableNumber, menuItems, activeOrders, onPlaceOrder, onEx
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 bg-slate-100">
-          {/* Order Status Banner */}
           {status === 'Verifying' && <PaymentTimer order={tableOrder} />}
           {status === 'Pending' && <div className="bg-purple-100 border-l-4 border-purple-600 text-purple-900 p-4 rounded-2xl mb-4 shadow-sm"><p className="font-black text-lg">Order Placed!</p><p className="text-sm opacity-80">Waiting for restaurant confirmation.</p></div>}
           {status === 'Preparing' && <div className="bg-blue-100 border-l-4 border-blue-600 text-blue-900 p-4 rounded-2xl mb-4 shadow-sm"><p className="font-black text-lg">Preparing Order 👨‍🍳</p><p className="text-sm opacity-80">Kitchen is cooking your delicious meal.</p></div>}
@@ -520,6 +492,7 @@ function PaymentTimer({ order }) {
     </div>
   );
 }
+
 /* ---------------- FULL ADMIN DASHBOARD ---------------- */
 function AdminDashboard(p) {
   const [tab, setTab] = useState('orders');
@@ -599,9 +572,8 @@ function SideBtn({ icon, label, active, onClick, badge }) {
       <span className="font-bold hidden md:block text-left flex-1">{label}</span>{badge > 0 && <span className="hidden md:flex bg-pink-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{badge}</span>}
     </button>
   );
-}
-
-/* ---------------- 4-COLUMN ORDERS BOARD ---------------- */
+                                                                                           }
+   /* ---------------- 4-COLUMN ORDERS BOARD ---------------- */
 function OrdersBoard({ orders, updateStatus, cancelOrder }) {
   const col = (s) => orders.filter(o => o.status === s);
   return (
@@ -712,7 +684,7 @@ function MenuForm({ item, categories, descriptions, onSave, onClose }) {
       </div>
     </Modal>
   );
-}
+        }
 
 /* ---------------- INVENTORY TAB ---------------- */
 function InventoryTab({ stockInv, iceInv, db }) {
@@ -793,7 +765,7 @@ function InvSection({ title, icon, items, colName, db, prefix }) {
   );
 }
 
-/* ---------------- JPG A4 QR CARD GENERATOR (HTML2CANVAS / PRINT) ---------------- */
+/* ---------------- JPG QR CARD GENERATOR ---------------- */
 function QRTab({ logo }) {
   const [link, setLink] = useState('');
   const [tbl, setTbl] = useState('');
@@ -809,7 +781,6 @@ function QRTab({ logo }) {
   const downloadJPG = () => {
     if (!cardData || !cardRef.current) return;
     playSfx('click');
-    // Using simple canvas rendering to export exact high-res JPG image
     const node = cardRef.current;
     import('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js').then(() => {
       window.html2canvas(node, { scale: 3, useCORS: true }).then(canvas => {
@@ -819,7 +790,6 @@ function QRTab({ logo }) {
         a.click();
       });
     }).catch(() => {
-      // Fallback print window if script fails
       window.print();
     });
   };
@@ -855,6 +825,7 @@ function QRTab({ logo }) {
     </div>
   );
 }
+
 /* ---------------- HISTORY & REVENUE TAB ---------------- */
 function HistoryTab({ history, db }) {
   const [from, setFrom] = useState(''); const [to, setTo] = useState('');
@@ -899,9 +870,8 @@ function HistoryTab({ history, db }) {
       </table></div>
     </div>
   );
-}
-
-/* ---------------- SETTINGS TAB (LOGO UPLOAD) ---------------- */
+          }
+/* ---------------- SETTINGS TAB ---------------- */
 function SettingsTab({ logo, db }) {
   const fileRef = useRef(null);
   const saveLogo = async (url) => {
