@@ -38,7 +38,7 @@ const playSfx = (name) => {
 const speak = (txt) => {
   if (!VOICE_ENABLED || !window.speechSynthesis) return;
   try {
-    window.speechSynthesis.cancel(); // Stop previous utterance
+    window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(txt);
     const voices = window.speechSynthesis.getVoices();
     const femaleVoice = voices.find(v => /(female|samantha|zira|google us english|heera|veena)/i.test(v.name));
@@ -525,25 +525,36 @@ function PaymentTimer({ order }) {
   );
 }
 
-/* ---------------- FULL ADMIN DASHBOARD ---------------- */
+/* ---------------- FULL ADMIN DASHBOARD WITH REPEATING ALERT ---------------- */
 function AdminDashboard(p) {
   const [tab, setTab] = useState('orders');
   
-  const prevCount = useRef(p.activeOrders.length);
+  // Smart Repeating Alert every 10 seconds until unaccepted orders exist
+  const pendingOrders = p.activeOrders.filter(o => o.status === 'Verifying' || o.status === 'Pending');
+  
   useEffect(() => {
-    if (p.activeOrders.length > prevCount.current) {
-      const newOrder = p.activeOrders[0];
-      playSfx('ring');
-      setTimeout(() => {
-        if (newOrder.payment === 'Online') {
-          speak(`New online payment received for Table ${newOrder.table}. Please verify and accept.`);
-        } else {
-          speak(`New Cash on Delivery order for Table ${newOrder.table}.`);
-        }
-      }, 1000);
+    if (pendingOrders.length === 0) return;
+    
+    // Play immediately on mount/new order
+    playSfx('ring');
+    const firstOrder = pendingOrders[0];
+    if (firstOrder.payment === 'Online') {
+      speak(`New online payment received for Table ${firstOrder.table}. Please verify and accept.`);
+    } else {
+      speak(`New Cash on Delivery order for Table ${firstOrder.table}. Please accept.`);
     }
-    prevCount.current = p.activeOrders.length;
-  }, [p.activeOrders]);
+
+    // Repeat every 10 seconds until accepted
+    const interval = setInterval(() => {
+      if (pendingOrders.length > 0) {
+        playSfx('ring');
+        const ord = pendingOrders[0];
+        speak(`Reminder! Unaccepted order for Table ${ord.table}. Please accept.`);
+      }
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [pendingOrders.length]);
 
   const updateStatus = async (id, st) => {
     playSfx('click');
@@ -787,7 +798,7 @@ function InvSection({ title, icon, items, colName, db, prefix, search }) {
     <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
       <div className="p-4 md:p-5 border-b border-slate-200 flex justify-between items-center bg-slate-50 gap-3">
         <h2 className="text-base md:text-xl font-black text-slate-800 flex items-center gap-2 truncate">{icon} {title}</h2>
-        <button onClick={() => { playSfx('click'); setEdit(null); }} className="bg-purple-700 text-white px-4 py-2 rounded-xl font-bold flex gap-1.5 items-center text-xs md:text-sm shrink-0"><Plus className="w-4 h-4" /> Add Item</button>
+        <button onClick={() => { playSfx('click'); setEdit(null); }} className="bg-purple-700 text-white px-4 py-2.5 rounded-xl font-bold flex gap-1.5 items-center text-xs md:text-sm shrink-0"><Plus className="w-4 h-4" /> Add Item</button>
       </div>
       <div className="overflow-x-auto"><table className="w-full text-left min-w-[500px]">
         <thead className="bg-slate-100 text-slate-500 text-xs uppercase"><tr><th className="p-3 pl-6">Item</th><th className="p-3">Qty</th><th className="p-3">Expense (₹)</th><th className="p-3">Alert At</th><th className="p-3 text-right pr-6">Actions</th></tr></thead>
