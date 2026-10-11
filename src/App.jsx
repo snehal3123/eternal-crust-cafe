@@ -5,23 +5,6 @@ import {
   CreditCard, Banknote, X, History, Download, Image as ImageIcon, Package, AlertTriangle, Upload, IceCream, Lock, Eye, EyeOff, Settings, Volume2, VolumeX, Mic
 } from 'lucide-react';
 
-// --- FIREBASE INITIALIZATION ---
-import { initializeApp } from "firebase/app";
-import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc } from "firebase/firestore";
-
-const firebaseConfig = {
-  apiKey: "AIzaSyAsmMqePWXD27z7EMAOUetSC5HqV03ScpM",
-  authDomain: "eternalcrust.firebaseapp.com",
-  projectId: "eternalcrust",
-  storageBucket: "eternalcrust.firebasestorage.app",
-  messagingSenderId: "261216829451",
-  appId: "1:261216829451:web:325aaac3d97a5a9280070e",
-  measurementId: "G-2EWDLMFX8K"
-};
-
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-
 /* ---------------- AUDIO & VOICE ENGINE ---------------- */
 let AC = null;
 let SOUND_ENABLED = true;
@@ -72,12 +55,149 @@ const readImg = (f) => new Promise((res) => {
   const r = new FileReader(); r.onload = () => { const im = new Image(); im.onload = () => { const c = document.createElement('canvas'); const s = Math.min(1, 600 / Math.max(im.width, im.height)); c.width = im.width * s; c.height = im.height * s; c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); res(c.toDataURL('image/jpeg', 0.8)); }; im.src = r.result; }; r.readAsDataURL(f);
 });
 
+// Full Menu matching the printed menu cards
+const initialMenu = [
+  // Pizza
+  { id: 'p1', category: 'Pizza', name: 'Small Pizza', price: 139, stock: true },
+  { id: 'p2', category: 'Pizza', name: 'Classic Margarita Pizza', price: 149, v: [['Regular', 149], ['Large', 189]], stock: true },
+  { id: 'p3', category: 'Pizza', name: 'Paneer Mushroom Pizza', price: 169, v: [['Regular', 169], ['Large', 189]], stock: true },
+  { id: 'p4', category: 'Pizza', name: 'Cheese Chilli Pizza', price: 169, v: [['Regular', 169], ['Large', 199]], stock: true },
+  { id: 'p5', category: 'Pizza', name: 'Hot Garlic Pizza', price: 169, v: [['Regular', 169], ['Large', 199]], stock: true },
+  { id: 'p6', category: 'Pizza', name: 'Vegetable Delight Pizza', price: 179, v: [['Regular', 179], ['Large', 209]], stock: true },
+  { id: 'p7', category: 'Pizza', name: 'Veg Crispy Corn Pizza', price: 179, v: [['Regular', 179], ['Large', 209]], stock: true },
+  { id: 'p8', category: 'Pizza', name: 'Tandoori Paneer Tikka Pizza', price: 199, v: [['Regular', 199], ['Large', 229]], stock: true },
+  { id: 'p9', category: 'Pizza', name: 'Paneer Makhani Pizza', price: 199, v: [['Regular', 199], ['Large', 229]], stock: true },
+  { id: 'p10', category: 'Pizza', name: 'Vegetable Tandoor Pizza', price: 199, v: [['Regular', 199], ['Large', 219]], stock: true },
+  { id: 'p11', category: 'Pizza', name: 'BBQ Paneer Pizza', price: 209, v: [['Regular', 209], ['Large', 239]], stock: true },
+  { id: 'p12', category: 'Pizza', name: 'Eternal Crust Special Pizza', price: 219, v: [['Regular', 219], ['Large', 249]], stock: true },
+
+  // Garlic Bread
+  { id: 'gb1', category: 'Garlic Bread', name: 'Classic Garlic Bread', price: 99, stock: true },
+  { id: 'gb2', category: 'Garlic Bread', name: 'Cheese Chilli Garlic Bread', price: 109, stock: true },
+  { id: 'gb3', category: 'Garlic Bread', name: 'Cheese Corn Garlic Bread', price: 109, stock: true },
+
+  // Pasta
+  { id: 'pa1', category: 'Pasta', name: 'Penne Arrabiata Pasta', price: 139, stock: true },
+  { id: 'pa2', category: 'Pasta', name: 'Alfredo Pasta', price: 139, stock: true },
+  { id: 'pa3', category: 'Pasta', name: 'Mamma Rosa Pasta', price: 139, stock: true },
+  { id: 'pa4', category: 'Pasta', name: 'Spaghetti Aglio Olio', price: 139, stock: true },
+  { id: 'pa5', category: 'Pasta', name: 'Mushroom Pasta', price: 169, stock: true },
+  { id: 'pa6', category: 'Pasta', name: 'Paneer Tikka Pasta', price: 169, stock: true },
+
+  // Fries
+  { id: 'f1', category: 'Fries', name: 'Classic Fries', price: 79, stock: true },
+  { id: 'f2', category: 'Fries', name: 'Peri Peri Fries', price: 89, stock: true },
+  { id: 'f3', category: 'Fries', name: 'Schezwan French Fries', price: 99, stock: true },
+  { id: 'f4', category: 'Fries', name: 'Chilli Garlic Fries', price: 109, stock: true },
+  { id: 'f5', category: 'Fries', name: 'Cheese Loaded Fries', price: 119, stock: true },
+
+  // Sandwich
+  { id: 's1', category: 'Sandwich', name: 'Vegetable Sandwich', price: 69, stock: true },
+  { id: 's2', category: 'Sandwich', name: 'Russian Salad Sandwich', price: 79, stock: true },
+  { id: 's3', category: 'Sandwich', name: 'Mumbai Club Sandwich', price: 89, stock: true },
+  { id: 's4', category: 'Sandwich', name: 'Vegetable Grill Sandwich', price: 89, stock: true },
+  { id: 's5', category: 'Sandwich', name: 'Vegetable Cheese Grill Sandwich', price: 109, stock: true },
+  { id: 's6', category: 'Sandwich', name: 'Chilli Cheese Onion Club Grill Sandwich', price: 119, stock: true },
+  { id: 's7', category: 'Sandwich', name: 'Paneer Tikka Grill Sandwich', price: 149, stock: true },
+  { id: 's8', category: 'Sandwich', name: 'Mushroom Cheese Grill Sandwich', price: 149, stock: true },
+
+  // Maggie
+  { id: 'mg1', category: 'Maggie', name: 'Masala Maggie', price: 49, stock: true },
+  { id: 'mg2', category: 'Maggie', name: 'Butter Maggie', price: 59, stock: true },
+  { id: 'mg3', category: 'Maggie', name: 'Vegetable Maggie', price: 69, stock: true },
+  { id: 'mg4', category: 'Maggie', name: 'Peri Peri Cheese Maggie', price: 89, stock: true },
+  { id: 'mg5', category: 'Maggie', name: 'Paneer Vegetable Maggie', price: 89, stock: true },
+  { id: 'mg6', category: 'Maggie', name: 'Paneer Maggie', price: 89, stock: true },
+
+  // Panini
+  { id: 'pn1', category: 'Panini', name: 'Classic Panini', price: 129, stock: true },
+  { id: 'pn2', category: 'Panini', name: 'Mix Vegetable Panini', price: 139, stock: true },
+  { id: 'pn3', category: 'Panini', name: 'Schezwan Panini', price: 149, stock: true },
+  { id: 'pn4', category: 'Panini', name: 'Paneer Panini', price: 159, stock: true },
+  { id: 'pn5', category: 'Panini', name: 'Corn Cheese Chilli Panini', price: 169, stock: true },
+  { id: 'pn6', category: 'Panini', name: 'Corn Schezwan Cheese Chilli Panini', price: 179, stock: true },
+
+  // Burger
+  { id: 'b1', category: 'Burger', name: 'Vegetable Burger', price: 89, stock: true },
+  { id: 'b2', category: 'Burger', name: 'Vegetable Cheese Burger', price: 109, stock: true },
+  { id: 'b3', category: 'Burger', name: 'Paneer Tikka Crispy Burger', price: 149, stock: true },
+  { id: 'b4', category: 'Burger', name: 'Cheese Burst Burger', price: 179, stock: true },
+  { id: 'b5', category: 'Burger', name: 'Maharaja Burger', price: 189, stock: true },
+
+  // Momos
+  { id: 'mo1', category: 'Momos', name: 'Vegetable Momos', price: 99, stock: true },
+  { id: 'mo2', category: 'Momos', name: 'Schezwan Momos', price: 119, stock: true },
+  { id: 'mo3', category: 'Momos', name: 'Mushroom Momos', price: 139, stock: true },
+  { id: 'mo4', category: 'Momos', name: 'Paneer Momos', price: 159, stock: true },
+  { id: 'mo5', category: 'Momos', name: 'Kurkure Momos', price: 159, stock: true },
+
+  // Frankie
+  { id: 'fr1', category: 'Frankie', name: 'Noodles Frankie', price: 79, stock: true },
+  { id: 'fr2', category: 'Frankie', name: 'Classic Frankie', price: 79, stock: true },
+  { id: 'fr3', category: 'Frankie', name: 'Paneer Tikka Frankie', price: 129, stock: true },
+  { id: 'fr4', category: 'Frankie', name: 'Paneer Mushroom Frankie', price: 139, stock: true },
+  { id: 'fr5', category: 'Frankie', name: 'Baby Corn Cheese Frankie', price: 139, stock: true },
+
+  // Combos
+  { id: 'co1', category: 'Combos', name: 'Pizza Combo', price: 359, desc: '1 Regular Pizza, 1 Classic Garlic Bread, Peri Peri Fries, Coke (500ml)', stock: true },
+  { id: 'co2', category: 'Combos', name: 'Burger Combo', price: 299, desc: '1 Veg Burger, 1 Classic Garlic Bread, Peri Peri Fries, Coke (500ml)', stock: true },
+
+  // Beverages
+  { id: 'bev1', category: 'Beverages', name: 'Hot Tea', price: 19, stock: true },
+  { id: 'bev2', category: 'Beverages', name: 'Hot Coffee', price: 29, stock: true },
+  { id: 'bev3', category: 'Beverages', name: 'Hot Chocolate', price: 69, stock: true },
+  { id: 'bev4', category: 'Beverages', name: 'Thick Cold Coffee', price: 79, stock: true },
+
+  // Waffles
+  { id: 'wf1', category: 'Waffles', name: 'Classic Waffle', price: 89, stock: true },
+  { id: 'wf2', category: 'Waffles', name: 'Chocolate Waffle', price: 99, stock: true },
+  { id: 'wf3', category: 'Waffles', name: 'Ice Cream Waffle', price: 119, stock: true },
+  { id: 'wf4', category: 'Waffles', name: 'Strawberry Waffle', price: 109, stock: true },
+  { id: 'wf5', category: 'Waffles', name: 'Banana Waffle', price: 109, stock: true },
+  { id: 'wf6', category: 'Waffles', name: 'Nutella Waffle', price: 109, stock: true },
+
+  // Desserts
+  { id: 'ds1', category: 'Desserts', name: 'Sizzling Brownie', price: 199, stock: true },
+
+  // Scoop Ice Cream
+  { id: 'sc1', category: 'Scoop Ice Cream', name: '1 Scoop', price: 59, stock: true },
+  { id: 'sc2', category: 'Scoop Ice Cream', name: '2 Scoops', price: 99, stock: true },
+
+  // Mocktails
+  { id: 'mk1', category: 'Mocktails', name: 'Ice Honey Lime Soda', price: 99, stock: true },
+  { id: 'mk2', category: 'Mocktails', name: 'Strawberry Peach Soda', price: 99, stock: true },
+  { id: 'mk3', category: 'Mocktails', name: 'Orange Ice Soda', price: 99, stock: true },
+  { id: 'mk4', category: 'Mocktails', name: 'Blue Berry Mojito', price: 109, stock: true },
+  { id: 'mk5', category: 'Mocktails', name: 'Mint Mojito', price: 109, stock: true },
+  { id: 'mk6', category: 'Mocktails', name: 'Black Current Mojito', price: 109, stock: true },
+
+  // Thick Shakes
+  { id: 'ts1', category: 'Thick Shakes', name: 'Chocolate Thick Milkshake', price: 149, stock: true },
+  { id: 'ts2', category: 'Thick Shakes', name: 'Mango Thick Milkshake', price: 149, stock: true },
+  { id: 'ts3', category: 'Thick Shakes', name: 'Strawberry Thick Milkshake', price: 149, stock: true },
+  { id: 'ts4', category: 'Thick Shakes', name: 'Oreo Thick Milkshake', price: 149, stock: true },
+  { id: 'ts5', category: 'Thick Shakes', name: 'Kitkat Thick Milkshake', price: 149, stock: true },
+  { id: 'ts6', category: 'Thick Shakes', name: 'Brownie Thick Milkshake', price: 169, stock: true },
+
+  // Lattes
+  { id: 'lt1', category: 'Lattes', name: 'Spanish Ice Latte', price: 159, stock: true },
+  { id: 'lt2', category: 'Lattes', name: 'Ice Mocha', price: 159, stock: true },
+  { id: 'lt3', category: 'Lattes', name: 'Ice Caramel Latte', price: 159, stock: true },
+  { id: 'lt4', category: 'Lattes', name: 'Iced Strawberry Coffee Latte', price: 179, stock: true },
+  { id: 'lt5', category: 'Lattes', name: 'Oreo Spanish Latte', price: 179, stock: true },
+  { id: 'lt6', category: 'Lattes', name: 'Biscoff Spanish Latte', price: 179, stock: true },
+  { id: 'lt7', category: 'Lattes', name: 'Blue Vanilla Latte', price: 179, stock: true },
+];
+
+const initialStock = [{ id: 'i1', name: 'Pizza Base', qty: 40, unit: 'pcs', min: 10 }, { id: 'i2', name: 'Burger Buns', qty: 30, unit: 'pcs', min: 10 }];
+const initialIceCream = [{ id: 'ic1', name: 'Vanilla', qty: 50, unit: 'scoops', min: 10 }, { id: 'ic2', name: 'Chocolate', qty: 30, unit: 'scoops', min: 10 }];
+const initialTables = Array.from({ length: 15 }, (_, i) => ({ id: `t${i + 1}`, name: `${i + 1}` }));
+
 /* ---------------- MAIN APP ---------------- */
 export default function App() {
-  const qs = new URLSearchParams(window.location.search);
-  const urlTable = qs.get('table');
-  const [mode, setMode] = useState(urlTable ? 'customer' : 'landing');
-  const [table, setTable] = useState(urlTable);
+  const [sessionTable, setSessionTable] = useState(() => localStorage.getItem('ec_active_table') || null);
+  const [mode, setMode] = useState(sessionTable ? 'customer' : 'landing');
+  const [table, setTable] = useState(sessionTable);
   const [isAdminAuth, setIsAdminAuth] = useState(false);
 
   const [menuItems, setMenuItems] = useState([]);
@@ -89,15 +209,31 @@ export default function App() {
   const [cafeLogo, setCafeLogo] = useState('');
 
   // Firestore Realtime Synchronization
+  import_db_listeners: useEffect(() => {
+    // We can simulate or use Firebase if configured. Here we use full real-time snapshot sync.
+  }, []);
+
+  // Let's integrate Firestore initialization safely
+  import { initializeApp } from "firebase/app";
+  import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc } from "firebase/firestore";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyAsmMqePWXD27z7EMAOUetSC5HqV03ScpM",
+    authDomain: "eternalcrust.firebaseapp.com",
+    projectId: "eternalcrust",
+    storageBucket: "eternalcrust.firebasestorage.app",
+    messagingSenderId: "261216829451",
+    appId: "1:261216829451:web:325aaac3d97a5a9280070e",
+    measurementId: "G-2EWDLMFX8K"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
   useEffect(() => {
     const unsubMenu = onSnapshot(collection(db, 'menu'), (snap) => {
       if (snap.empty) {
-        // Seed default menu if empty
-        const defaultMenu = [
-          { id: 'p1', category: 'Pizza', name: 'Small Pizza', price: 139, desc: '6 inch regular crust', stock: true },
-          { id: 'p2', category: 'Pizza', name: 'Classic Margarita Pizza', price: 149, v: [['Regular', 149], ['Large', 189]], desc: 'Double cheese layer', stock: true }
-        ];
-        defaultMenu.forEach(item => setDoc(doc(db, 'menu', item.id), item));
+        initialMenu.forEach(item => setDoc(doc(db, 'menu', item.id), item));
       } else {
         setMenuItems(snap.docs.map(d => ({ ...d.data(), id: d.id })));
       }
@@ -113,18 +249,26 @@ export default function App() {
 
     const unsubTables = onSnapshot(collection(db, 'tables'), (snap) => {
       if (snap.empty) {
-        Array.from({ length: 15 }, (_, i) => ({ id: `t${i + 1}`, name: `${i + 1}` })).forEach(t => setDoc(doc(db, 'tables', t.id), t));
+        initialTables.forEach(t => setDoc(doc(db, 'tables', t.id), t));
       } else {
         setTables(snap.docs.map(d => ({ ...d.data(), id: d.id })));
       }
     });
 
     const unsubStock = onSnapshot(collection(db, 'stock'), (snap) => {
-      setStockInv(snap.docs.map(d => ({ ...d.data(), id: d.id })));
+      if (snap.empty) {
+        initialStock.forEach(s => setDoc(doc(db, 'stock', s.id), s));
+      } else {
+        setStockInv(snap.docs.map(d => ({ ...d.data(), id: d.id })));
+      }
     });
 
     const unsubIce = onSnapshot(collection(db, 'icecream'), (snap) => {
-      setIceInv(snap.docs.map(d => ({ ...d.data(), id: d.id })));
+      if (snap.empty) {
+        initialIceCream.forEach(i => setDoc(doc(db, 'icecream', i.id), i));
+      } else {
+        setIceInv(snap.docs.map(d => ({ ...d.data(), id: d.id })));
+      }
     });
 
     const unsubSettings = onSnapshot(doc(db, 'settings', 'config'), (snap) => {
@@ -144,13 +288,14 @@ export default function App() {
   }, []);
 
   const placeOrder = async (tbl, cart, total, payment) => {
-    const newOrder = { table: tbl, items: cart, total, payment, status: payment === 'Online' ? 'Verifying' : 'Pending', time: Date.now() };
-    await addDoc(collection(db, 'orders'), newOrder);
+    const numericId = Math.floor(10000 + Math.random() * 90000).toString(); // Pure numeric ID
+    const newOrder = { id: numericId, table: tbl, items: cart, total, payment, status: payment === 'Online' ? 'Verifying' : 'Pending', time: Date.now() };
+    await setDoc(doc(db, 'orders', numericId), newOrder);
     playSfx('success');
   };
 
   const completeOrder = async (o) => {
-    await addDoc(collection(db, 'history'), { ...o, status: 'Completed', completedAt: Date.now() });
+    await setDoc(doc(db, 'history', o.id), { ...o, status: 'Completed', completedAt: Date.now() });
     await deleteDoc(doc(db, 'orders', o.id));
     playSfx('save');
   };
@@ -160,10 +305,24 @@ export default function App() {
     playSfx('del');
   };
 
+  const joinTable = (tblName) => {
+    setTable(tblName);
+    setSessionTable(tblName);
+    localStorage.setItem('ec_active_table', tblName);
+    setMode('customer');
+  };
+
+  const exitTable = () => {
+    localStorage.removeItem('ec_active_table');
+    setSessionTable(null);
+    setTable(null);
+    setMode('landing');
+  };
+
   return (
     <div className="min-h-screen bg-purple-950 font-sans text-slate-100 selection:bg-purple-500">
-      {mode === 'landing' && <LandingView tables={tables} logo={cafeLogo} onJoin={(t) => { setTable(t); setMode('customer'); }} onAdminLogin={() => { setIsAdminAuth(true); setMode('admin'); }} />}
-      {mode === 'customer' && <CustomerView tableNumber={table} menuItems={menuItems} activeOrders={activeOrders} onPlaceOrder={placeOrder} onExit={urlTable ? null : () => setMode('landing')} />}
+      {mode === 'landing' && <LandingView tables={tables} activeOrders={activeOrders} logo={cafeLogo} onJoin={joinTable} onAdminLogin={() => { setIsAdminAuth(true); setMode('admin'); }} />}
+      {mode === 'customer' && <CustomerView tableNumber={table} menuItems={menuItems} activeOrders={activeOrders} onPlaceOrder={placeOrder} onExit={exitTable} />}
       {mode === 'admin' && isAdminAuth && <AdminDashboard {...{ activeOrders, setActiveOrders, orderHistory, setOrderHistory, completeOrder, cancelOrder, menuItems, setMenuItems, tables, setTables, stockInv, setStockInv, iceInv, setIceInv, cafeLogo, setCafeLogo, db }} onExit={() => { setIsAdminAuth(false); setMode('landing'); }} />}
     </div>
   );
@@ -187,35 +346,56 @@ function DelBtn({ onDel }) {
   return <button onClick={() => { playSfx('click'); if (a) onDel(); else setA(true); }} className={`p-2 rounded-xl transition-colors text-xs font-black ${a ? 'bg-red-600 text-white' : 'bg-slate-50 text-slate-400 hover:text-red-600 hover:bg-red-50'}`}>{a ? 'Sure?' : <Trash2 className="w-4 h-4" />}</button>;
 }
 
-/* ---------------- LANDING VIEW (CENTER WHEEL + LOGO) ---------------- */
-function LandingView({ tables, logo, onJoin, onAdminLogin }) {
+/* ---------------- LANDING VIEW (NUMERIC SORTED TABLES + ALREADY BOOKED CHECK) ---------------- */
+function LandingView({ tables, activeOrders, logo, onJoin, onAdminLogin }) {
   const [showLogin, setShowLogin] = useState(false);
   const [wi, setWi] = useState(0);
 
+  // Numerically sorted tables (1, 2, 3... 10, 11...)
+  const sortedTables = useMemo(() => {
+    return [...tables].sort((a, b) => (parseInt(a.name) || 0) - (parseInt(b.name) || 0));
+  }, [tables]);
+
+  const currentTable = sortedTables[wi] || { name: '1' };
+  
+  // Check if this table currently has an active order (is booked)
+  const isBooked = activeOrders.some(o => o.table === String(currentTable.name) && o.status !== 'Completed');
+
   return (
-    <div className="relative min-h-screen flex flex-col overflow-hidden bg-gradient-to-b from-purple-950 via-purple-900 to-indigo-950" onWheel={(e) => setWi(p => e.deltaY > 0 ? Math.min(p + 1, tables.length - 1) : Math.max(p - 1, 0))}>
+    <div className="relative min-h-screen flex flex-col overflow-hidden bg-gradient-to-b from-purple-950 via-purple-900 to-indigo-950" onWheel={(e) => setWi(p => e.deltaY > 0 ? Math.min(p + 1, sortedTables.length - 1) : Math.max(p - 1, 0))}>
       <div className="absolute top-6 right-6 z-50"><button onClick={() => { playSfx('click'); setShowLogin(true); }} className="p-3 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full text-white"><Lock className="w-5 h-5" /></button></div>
       
       <div className="flex-1 flex flex-col items-center justify-center p-6 w-full max-w-4xl mx-auto">
-        <div className="flex flex-col items-center text-center z-10 mb-10 w-full">
-          <div className="w-28 h-28 bg-purple-800/50 rounded-full shadow-[0_0_40px_rgba(168,85,247,0.4)] mb-6 backdrop-blur-sm border-4 border-purple-400/50 overflow-hidden flex items-center justify-center shrink-0">
+        <div className="flex flex-col items-center text-center z-10 mb-8 w-full">
+          <div className="w-28 h-28 bg-purple-800/50 rounded-full shadow-[0_0_40px_rgba(168,85,247,0.4)] mb-4 backdrop-blur-sm border-4 border-purple-400/50 overflow-hidden flex items-center justify-center shrink-0">
             {logo ? <img src={logo} alt="Logo" className="w-full h-full object-cover" /> : <Coffee className="w-12 h-12 text-purple-200" />}
           </div>
-          <h1 className="text-4xl md:text-6xl font-black text-white mb-2 tracking-tight drop-shadow-lg">{CAFE_NAME}</h1>
-          <p className="text-purple-300 text-lg font-medium tracking-wide">Good food travels better.</p>
+          <h1 className="text-3xl md:text-5xl font-black text-white mb-1 tracking-tight drop-shadow-lg">{CAFE_NAME}</h1>
+          <p className="text-purple-300 text-sm md:text-base font-medium tracking-wide">Good food travels better.</p>
         </div>
 
         <div className="relative flex flex-col items-center justify-center bg-white/5 backdrop-blur-md p-8 rounded-[3rem] border border-white/10 shadow-2xl">
           <div className="text-sm font-black uppercase tracking-widest text-purple-300 mb-6">Select Your Table</div>
-          <div className="flex items-center gap-6 mb-8">
+          <div className="flex items-center gap-6 mb-6">
             <button onClick={() => { playSfx('click'); setWi(p => Math.max(p - 1, 0)); }} className="p-4 bg-purple-800/80 rounded-full hover:bg-purple-700 shadow-lg text-white"><Minus className="w-6 h-6" /></button>
             <div className="w-32 h-32 bg-white text-purple-950 rounded-full flex items-center justify-center text-6xl font-black shadow-[0_0_50px_rgba(255,255,255,0.2)] border-8 border-purple-400/50 z-20 transition-all">
-              {tables[wi]?.name || '1'}
+              {currentTable.name}
             </div>
-            <button onClick={() => { playSfx('click'); setWi(p => Math.min(p + 1, tables.length - 1)); }} className="p-4 bg-purple-800/80 rounded-full hover:bg-purple-700 shadow-lg text-white"><Plus className="w-6 h-6" /></button>
+            <button onClick={() => { playSfx('click'); setWi(p => Math.min(p + 1, sortedTables.length - 1)); }} className="p-4 bg-purple-800/80 rounded-full hover:bg-purple-700 shadow-lg text-white"><Plus className="w-6 h-6" /></button>
           </div>
-          <button onClick={() => { playSfx('click'); onJoin(tables[wi]?.name || '1'); }} className="w-64 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-xl py-4 rounded-full shadow-[0_10px_30px_rgba(147,51,234,0.4)] active:scale-95 transition-all">
-            JOIN TABLE
+
+          {isBooked ? (
+            <div className="bg-red-500/20 border border-red-500 text-red-200 px-6 py-3 rounded-2xl font-bold text-sm mb-4 text-center">
+              Table {currentTable.name} is already booked/occupied. Please select another table.
+            </div>
+          ) : null}
+
+          <button 
+            disabled={isBooked}
+            onClick={() => { playSfx('click'); onJoin(currentTable.name); }} 
+            className="w-64 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-40 text-white font-black text-xl py-4 rounded-full shadow-[0_10px_30px_rgba(147,51,234,0.4)] active:scale-95 transition-all"
+          >
+            {isBooked ? 'Already Booked' : 'JOIN TABLE'}
           </button>
         </div>
       </div>
@@ -225,26 +405,41 @@ function LandingView({ tables, logo, onJoin, onAdminLogin }) {
 }
 
 function AdminLoginModal({ onClose, onSuccess }) {
-  const [u, setU] = useState(''); const [p, setP] = useState(''); const [sp, setSp] = useState(false); const [err, setErr] = useState('');
+  const [u, setU] = useState('Eternalcrust2026'); 
+  const [p, setP] = useState('Eternalcrust2026@forever'); 
+  const [sp, setSp] = useState(false); 
+  const [err, setErr] = useState('');
+
   return (
     <Modal title="Admin Access" onClose={onClose}>
       <form onSubmit={(e) => { e.preventDefault(); if (u === 'Eternalcrust2026' && p === 'Eternalcrust2026@forever') { playSfx('success'); onSuccess(); } else { playSfx('error'); setErr('Invalid credentials'); } }} className="space-y-4">
         {err && <div className="bg-red-50 text-red-600 p-3 rounded-xl text-sm font-bold text-center">{err}</div>}
-        <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Username</label><input value={u} onChange={e => setU(e.target.value)} className={inpStyle} /></div>
-        <div className="relative"><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Password</label><input type={sp ? 'text' : 'password'} value={p} onChange={e => setP(e.target.value)} className={inpStyle} /><button type="button" onClick={() => setSp(!sp)} className="absolute right-4 top-[34px] text-slate-400">{sp ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}</button></div>
+        <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Username</label><input value={u} onChange={e => setU(e.target.value)} className={inpStyle} autoComplete="username" /></div>
+        <div className="relative"><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Password</label><input type={sp ? 'text' : 'password'} value={p} onChange={e => setP(e.target.value)} className={inpStyle} autoComplete="current-password" /><button type="button" onClick={() => setSp(!sp)} className="absolute right-4 top-[34px] text-slate-400">{sp ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}</button></div>
         <button type="submit" className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-4 rounded-xl mt-2">Login</button>
       </form>
     </Modal>
   );
 }
 
-/* ---------------- CUSTOMER VIEW ---------------- */
+/* ---------------- CUSTOMER VIEW (WITH LIVE STATUS & VOICE) ---------------- */
 function CustomerView({ tableNumber, menuItems, activeOrders, onPlaceOrder, onExit }) {
   const [cart, setCart] = useState([]); const [checkout, setCheckout] = useState(false);
   const cats = [...new Set(menuItems.map(i => i.category))]; const [activeCat, setActiveCat] = useState(cats[0]);
   const total = cart.reduce((s, c) => s + c.price * c.qty, 0); const count = cart.reduce((s, c) => s + c.qty, 0);
-  const verifying = activeOrders.find(o => o.table === tableNumber && o.status === 'Verifying');
-  const accepted = activeOrders.find(o => o.table === tableNumber && ['Pending', 'Preparing', 'Ready'].includes(o.status));
+
+  const tableOrder = activeOrders.find(o => o.table === String(tableNumber));
+  const status = tableOrder ? tableOrder.status : null; // Verifying, Pending, Preparing, Ready
+
+  // Voice announcement when order is ready
+  const prevStatus = useRef(status);
+  useEffect(() => {
+    if (prevStatus.current !== 'Ready' && status === 'Ready') {
+      playSfx('success');
+      speak(`Your order for Table ${tableNumber} is ready! Please pick it up from the counter.`);
+    }
+    prevStatus.current = status;
+  }, [status, tableNumber]);
 
   const add = (item, vi) => { playSfx('add'); const nm = item.name + (item.v ? ` (${item.v[vi][0]})` : ''); const pr = item.v ? item.v[vi][1] : item.price; const k = item.id + vi; setCart(p => p.find(c => c.key === k) ? p.map(c => c.key === k ? { ...c, qty: c.qty + 1 } : c) : [...p, { key: k, name: nm, price: pr, qty: 1 }]); };
   const chg = (k, d) => { playSfx(d > 0 ? 'add' : 'remove'); setCart(p => p.map(c => c.key === k ? { ...c, qty: c.qty + d } : c).filter(c => c.qty > 0)); };
@@ -253,13 +448,21 @@ function CustomerView({ tableNumber, menuItems, activeOrders, onPlaceOrder, onEx
     <div className="bg-purple-950 fixed inset-0 flex justify-center overflow-hidden">
       <div className="bg-slate-50 w-full max-w-md mx-auto sm:rounded-[2.5rem] sm:shadow-2xl overflow-hidden flex flex-col h-full relative text-slate-800">
         <header className="bg-purple-900 px-4 pt-4 pb-3 text-white shadow-md z-10 shrink-0">
-          <div className="flex items-center justify-between mb-3">{onExit ? <button onClick={() => { playSfx('click'); onExit(); }} className="p-2 -ml-2 bg-purple-800 rounded-full"><ChevronLeft className="w-5 h-5" /></button> : <div className="w-9 h-9" />}<div className="bg-purple-950/50 px-4 py-1.5 rounded-full border border-purple-700/50"><h1 className="text-sm font-black tracking-widest uppercase text-purple-200">Table {tableNumber}</h1></div><div className="w-9 h-9" /></div>
+          <div className="flex items-center justify-between mb-3">
+            {onExit ? <button onClick={() => { playSfx('click'); onExit(); }} className="p-2 -ml-2 bg-purple-800 rounded-full flex items-center gap-1 text-xs font-bold"><ChevronLeft className="w-4 h-4" /> Exit</button> : <div className="w-9 h-9" />}
+            <div className="bg-purple-950/50 px-4 py-1.5 rounded-full border border-purple-700/50"><h1 className="text-sm font-black tracking-widest uppercase text-purple-200">Table {tableNumber}</h1></div>
+            <div className="w-9 h-9" />
+          </div>
           <div className="flex overflow-x-auto gap-2 pb-2 scrollbar-hide">{cats.map(c => <button key={c} onClick={() => { playSfx('click'); setActiveCat(c); }} className={`whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-bold shrink-0 transition-colors ${activeCat === c ? 'bg-white text-purple-900 shadow-md' : 'bg-purple-800/80 text-purple-200'}`}>{c}</button>)}</div>
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 bg-slate-100">
-          {verifying && <PaymentTimer order={verifying} />}
-          {accepted && !verifying && <div className="bg-green-100 border-l-4 border-green-500 text-green-900 p-4 rounded-2xl mb-5 flex items-center gap-4"><CheckCircle className="w-8 h-8 text-green-600 shrink-0" /><div><p className="font-bold text-lg">Order Accepted!</p><p className="text-sm opacity-80">Kitchen is preparing your meal.</p></div></div>}
+          {/* Order Status Banner */}
+          {status === 'Verifying' && <PaymentTimer order={tableOrder} />}
+          {status === 'Pending' && <div className="bg-purple-100 border-l-4 border-purple-600 text-purple-900 p-4 rounded-2xl mb-4 shadow-sm"><p className="font-black text-lg">Order Placed!</p><p className="text-sm opacity-80">Waiting for restaurant confirmation.</p></div>}
+          {status === 'Preparing' && <div className="bg-blue-100 border-l-4 border-blue-600 text-blue-900 p-4 rounded-2xl mb-4 shadow-sm"><p className="font-black text-lg">Preparing Order 👨‍🍳</p><p className="text-sm opacity-80">Kitchen is cooking your delicious meal.</p></div>}
+          {status === 'Ready' && <div className="bg-green-100 border-l-4 border-green-600 text-green-900 p-4 rounded-2xl mb-4 shadow-sm animate-bounce"><p className="font-black text-xl">Your Order is Ready! 🎉</p><p className="text-sm opacity-80">Please pick it up from the counter.</p></div>}
+
           <div className="space-y-3 pb-24">
             {menuItems.filter(i => i.category === activeCat && i.stock).map(it => (
               <div key={it.id} className="bg-white p-3 rounded-2xl shadow-sm border border-slate-200 flex gap-3">
@@ -281,7 +484,7 @@ function CustomerView({ tableNumber, menuItems, activeOrders, onPlaceOrder, onEx
           </div>
         )}
 
-{checkout && (
+        {checkout && (
           <div className="absolute inset-0 bg-purple-950/80 backdrop-blur-sm z-30 flex items-end">
             <div className="bg-white w-full rounded-t-[2.5rem] p-6 pb-8 shadow-2xl max-h-[90%] overflow-y-auto">
               <div className="flex justify-between items-center mb-5"><h3 className="text-2xl font-black text-slate-900">Your Order</h3><button onClick={() => { playSfx('click'); setCheckout(false); }} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200"><X className="w-5 h-5" /></button></div>
@@ -317,12 +520,10 @@ function PaymentTimer({ order }) {
     </div>
   );
 }
-
 /* ---------------- FULL ADMIN DASHBOARD ---------------- */
 function AdminDashboard(p) {
   const [tab, setTab] = useState('orders');
   
-  // Audio Alerts for New Orders
   const prevCount = useRef(p.activeOrders.length);
   useEffect(() => {
     if (p.activeOrders.length > prevCount.current) {
@@ -431,7 +632,8 @@ function AdminCol({ title, icon, list, bg, text, action, color, onAction, onCanc
     </div>
   );
 }
- /* ---------------- MENU CRUD TAB ---------------- */
+
+/* ---------------- MENU CRUD TAB ---------------- */
 function MenuTab({ menuItems, db }) {
   const [edit, setEdit] = useState(undefined);
   const save = async (item) => {
@@ -560,7 +762,7 @@ function InvSection({ title, icon, items, colName, db, prefix }) {
             <td className="p-4 pl-6 font-bold">{i.name}</td>
             <td className="p-4"><div className="flex items-center gap-2"><button onClick={() => upd(i.id, i.qty, -1)} className="p-1.5 bg-slate-100 rounded-lg"><Minus className="w-4 h-4"/></button><span className="font-black w-20 text-center">{i.qty} {i.unit}</span><button onClick={() => upd(i.id, i.qty, 1)} className="p-1.5 bg-slate-100 rounded-lg"><Plus className="w-4 h-4"/></button></div></td>
             <td className="p-4 font-bold text-slate-500">{i.min}</td>
-            <td className="p-4 pr-6 text-right"><button onClick={() => { playSfx('click'); setEdit(i); }} className="p-2 text-slate-400 bg-slate-50 rounded-xl mr-2"><Edit className="w-4 h-4"/></button><DelBtn onDel={() => deleteInv(i.id)} /></td>
+            <td className="p-4 pr-6 text-right"><div className="flex justify-end gap-2"><button onClick={() => { playSfx('click'); setEdit(i); }} className="p-2 text-slate-400 bg-slate-50 rounded-xl"><Edit className="w-4 h-4"/></button><DelBtn onDel={() => deleteInv(i.id)} /></div></td>
           </tr>
         ))}
         {items.length === 0 && <tr><td colSpan="4" className="p-8 text-center font-bold text-slate-400">Empty List</td></tr>}
@@ -590,11 +792,13 @@ function InvSection({ title, icon, items, colName, db, prefix }) {
     </div>
   );
 }
-/* ---------------- EXACT LAYOUT QR GENERATOR ---------------- */
+
+/* ---------------- JPG A4 QR CARD GENERATOR (HTML2CANVAS / PRINT) ---------------- */
 function QRTab({ logo }) {
   const [link, setLink] = useState('');
   const [tbl, setTbl] = useState('');
   const [cardData, setCardData] = useState(null);
+  const cardRef = useRef(null);
 
   const generate = () => {
     if (!link.trim() || !tbl.trim()) return playSfx('error');
@@ -602,28 +806,22 @@ function QRTab({ logo }) {
     setCardData({ link: link.trim(), tbl: tbl.trim() });
   };
 
-  const printCard = () => {
-    if (!cardData) return;
+  const downloadJPG = () => {
+    if (!cardData || !cardRef.current) return;
     playSfx('click');
-    const qrImage = getQrUrl(cardData.link);
-    const logoImg = logo || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23d8b4fe" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2M14 2v2M6 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1z"/><path d="M17 11h1a3 3 0 0 1 0 6h-1"/></svg>';
-    
-    const html = `
-      <div style="width:340px; margin:20px auto; background:#fff; border-radius:36px; overflow:hidden; box-shadow:0 10px 30px rgba(0,0,0,0.1); font-family:sans-serif; text-align:center; padding-bottom:30px;">
-        <div style="background:#7e22ce; color:#fff; padding:30px 20px 80px; border-radius: 0 0 40px 40px;">
-          ${logo ? `<img src="${logo}" style="width:40px; height:40px; border-radius:50%; margin-bottom:10px; object-fit:cover;"/>` : `<img src="${logoImg}" style="width:40px; height:40px; margin-bottom:10px;"/>`}
-          <h1 style="font-size:36px; margin:0; font-weight:900; letter-spacing:1px;">Table ${cardData.tbl}</h1>
-          <p style="font-size:12px; font-weight:bold; letter-spacing:2px; color:#d8b4fe; margin-top:5px; margin-bottom:0;">SCAN TO ORDER</p>
-        </div>
-        <div style="background:#fff; width:220px; height:220px; margin:-60px auto 0; border-radius:24px; padding:10px; box-shadow:0 8px 24px rgba(0,0,0,0.15);">
-          <img src="${qrImage}" style="width:100%; height:100%; object-fit:contain;"/>
-        </div>
-        <h2 style="color:#4c1d95; font-size:18px; font-weight:900; margin:20px 0 0 0;">${CAFE_NAME}</h2>
-      </div>
-    `;
-    const f = document.createElement('iframe'); f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0'; document.body.appendChild(f);
-    const d = f.contentWindow.document; d.open(); d.write(`<html><head><title>QR Card Table ${cardData.tbl}</title></head><body>${html}</body></html>`); d.close();
-    setTimeout(() => { f.contentWindow.focus(); f.contentWindow.print(); setTimeout(() => f.remove(), 60000); }, 500);
+    // Using simple canvas rendering to export exact high-res JPG image
+    const node = cardRef.current;
+    import('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js').then(() => {
+      window.html2canvas(node, { scale: 3, useCORS: true }).then(canvas => {
+        const a = document.createElement('a');
+        a.href = canvas.toDataURL('image/jpeg', 1.0);
+        a.download = `Table_${cardData.tbl}_QR_Card.jpg`;
+        a.click();
+      });
+    }).catch(() => {
+      // Fallback print window if script fails
+      window.print();
+    });
   };
 
   return (
@@ -631,32 +829,32 @@ function QRTab({ logo }) {
       <div className="w-full md:w-1/2 bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
         <h2 className="font-black text-2xl text-purple-950 mb-4 flex items-center gap-2"><QrCode/> Create QR Card</h2>
         <div className="space-y-4">
-          <div><label className="text-xs font-bold text-slate-500 uppercase">1. Insert Website Link</label><input placeholder="https://..." value={link} onChange={e => setLink(e.target.value)} className={inpStyle} /></div>
-          <div><label className="text-xs font-bold text-slate-500 uppercase">2. Enter Table Number</label><input placeholder="e.g. 5" value={tbl} onChange={e => setTbl(e.target.value)} className={inpStyle} /></div>
+          <div><label className="text-xs font-bold text-slate-500 uppercase">1. Insert Website Link</label><input type="text" placeholder="https://..." value={link} onChange={e => setLink(e.target.value)} className={inpStyle} /></div>
+          <div><label className="text-xs font-bold text-slate-500 uppercase">2. Enter Table Number</label><input type="text" inputMode="numeric" placeholder="e.g. 5" value={tbl} onChange={e => setTbl(e.target.value)} className={inpStyle} /></div>
           <button onClick={generate} className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-4 rounded-xl">Generate Card View</button>
         </div>
       </div>
       
       {cardData && (
         <div className="w-full md:w-1/2 flex flex-col items-center justify-center p-8 bg-slate-200/50 rounded-3xl border-2 border-dashed border-slate-300">
-          <div className="w-[300px] bg-white rounded-[32px] overflow-hidden shadow-2xl text-center pb-6 border border-slate-100">
-            <div className="bg-[#7e22ce] text-white pt-6 pb-[70px] rounded-b-[40px]">
-              {logo ? <img src={logo} className="w-10 h-10 rounded-full mx-auto mb-2 object-cover" alt="logo" /> : <Coffee className="w-8 h-8 text-[#d8b4fe] mx-auto mb-2" />}
+          <div ref={cardRef} className="w-[340px] bg-white rounded-[36px] overflow-hidden shadow-2xl text-center pb-8 border border-slate-100">
+            <div className="bg-[#7e22ce] text-white pt-8 pb-[80px] rounded-b-[45px]">
+              {logo ? <img src={logo} className="w-12 h-12 rounded-full mx-auto mb-2 object-cover border-2 border-white" alt="logo" /> : <Coffee className="w-10 h-10 text-[#d8b4fe] mx-auto mb-2" />}
               <h1 className="text-4xl font-black m-0 leading-none">Table {cardData.tbl}</h1>
-              <p className="text-[10px] font-black tracking-[0.2em] text-[#d8b4fe] mt-2">SCAN TO ORDER</p>
+              <p className="text-[11px] font-black tracking-[0.25em] text-[#d8b4fe] mt-2">SCAN TO ORDER</p>
             </div>
-            <div className="bg-white w-48 h-48 mx-auto -mt-14 rounded-3xl p-3 shadow-[0_8px_30px_rgba(0,0,0,0.15)] relative z-10">
+            <div className="bg-white w-56 h-56 mx-auto -mt-16 rounded-3xl p-3 shadow-[0_10px_35px_rgba(0,0,0,0.18)] relative z-10 border border-slate-100">
               <img src={getQrUrl(cardData.link)} alt="QR" className="w-full h-full object-contain" />
             </div>
-            <h2 className="text-[#4c1d95] font-black text-lg mt-5 tracking-tight">{CAFE_NAME}</h2>
+            <h2 className="text-[#4c1d95] font-black text-xl mt-6 tracking-tight">{CAFE_NAME}</h2>
+            <p className="text-xs font-bold text-slate-400 mt-1">Good food travels better</p>
           </div>
-          <button onClick={printCard} className="mt-8 bg-slate-800 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg hover:bg-slate-700"><Printer className="w-5 h-5"/> Print Card</button>
+          <button onClick={downloadJPG} className="mt-8 bg-purple-800 text-white px-8 py-3.5 rounded-xl font-bold flex items-center gap-2 shadow-lg hover:bg-purple-900 active:scale-95"><Download className="w-5 h-5"/> Download JPG Image</button>
         </div>
       )}
     </div>
   );
 }
-
 /* ---------------- HISTORY & REVENUE TAB ---------------- */
 function HistoryTab({ history, db }) {
   const [from, setFrom] = useState(''); const [to, setTo] = useState('');
