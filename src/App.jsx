@@ -107,7 +107,6 @@ export default function App() {
   const [coupons, setCoupons] = useState([]);
   const [cafeLogo, setCafeLogo] = useState('');
 
-  // Daily 11 PM stock update reminder check
   useEffect(() => {
     const checkReminder = () => {
       const now = new Date();
@@ -194,10 +193,12 @@ export default function App() {
     await deleteDoc(doc(db, 'orders', o.id));
     playSfx('save');
 
-    // Send WhatsApp Bill
+    // Send WhatsApp Bill matching Cash Memo format
     if (o.customerPhone) {
-      const itemsList = o.items.map(i => `${i.qty}x ${i.name} - ₹${i.price * i.qty}`).join('\n');
-      const msg = `*${CAFE_NAME}* \n${CAFE_ADDRESS}\n--------------------\n*CASH MEMO*\nDate: ${new Date(o.completedAt).toLocaleDateString()}\nBill No: #${o.id}\nTable No: ${o.table}\nCustomer: ${o.customerName || 'Guest'}\n--------------------\n*Particulars | Qty | Amt*\n${o.items.map(i => `${i.name} | ${i.qty} | ₹${i.price * i.qty}`).join('\n')}\n--------------------\n*Total Amount: ₹${o.total}*\n--------------------\nThank You! Visit Again ✨`;
+      const dateStr = new Date(o.completedAt).toLocaleDateString();
+      const itemsText = o.items.map(i => `${i.name} | ${i.qty} | ₹${i.price * i.qty}`).join('\n');
+      const discountText = o.discount ? `Discount Applied: -₹${o.discount}\n` : '';
+      const msg = `*${CAFE_NAME}*\n${CAFE_ADDRESS}\n--------------------\n*Cash Memo*\nDate : ${dateStr}   Bill No.: #${o.id}\nT.No.: ${o.table}   Cust.: ${o.customerName || 'Guest'}\n--------------------\n*Particulars | Qty | Amount*\n${itemsText}\n--------------------\n${discountText}*Total : ₹${o.total}*\n--------------------\n    Thank You      Visit Again ✨`;
       const wpUrl = `https://wa.me/91${o.customerPhone}?text=${encodeURIComponent(msg)}`;
       window.open(wpUrl, '_blank');
     }
@@ -269,7 +270,7 @@ function DelBtn({ onDel }) {
   return <button onClick={() => { playSfx('click'); if (a) onDel(); else setA(true); }} className={`p-2 rounded-xl transition-colors text-xs font-black shrink-0 ${a ? 'bg-red-600 text-white' : 'bg-slate-50 text-slate-400 hover:text-red-600 hover:bg-red-50'}`}>{a ? 'Sure?' : <Trash2 className="w-4 h-4" />}</button>;
 }
 
-/* ---------------- LANDING VIEW WITH DETAILS ---------------- */
+/* ---------------- LANDING VIEW ---------------- */
 function LandingView({ tables, activeOrders, logo, onJoin, onAdminLogin }) {
   const [showLogin, setShowLogin] = useState(false);
   const [wi, setWi] = useState(0);
@@ -284,11 +285,7 @@ function LandingView({ tables, activeOrders, logo, onJoin, onAdminLogin }) {
   const currentTable = sortedTables[wi] || { name: '1' };
   const isBooked = activeOrders.some(o => o.table === String(currentTable.name) && o.status !== 'Completed');
 
-  const handleJoinClick = () => {
-    playSfx('click');
-    setShowModal(true);
-  };
-
+  const handleJoinClick = () => { playSfx('click'); setShowModal(true); };
   const handleProceed = (e) => {
     e.preventDefault();
     if (!name.trim() || !phone.trim() || phone.length < 10) return playSfx('error');
@@ -364,13 +361,26 @@ function AdminLoginModal({ onClose, onSuccess }) {
   );
 }
 
-/* ---------------- CUSTOMER VIEW (ALL MENU DEFAULT, COUPONS & PAID AMOUNT) ---------------- */
+/* ---------------- CUSTOMER VIEW WITH BANNER & ALL MENU DEFAULT ---------------- */
 function CustomerView({ tableNumber, customerName, customerPhone, menuItems, activeOrders, coupons, onPlaceOrder, onExit }) {
   const [cart, setCart] = useState([]); 
   const [checkout, setCheckout] = useState(false);
   const [selectedCoupon, setSelectedCoupon] = useState(null);
   const [couponCodeInput, setCouponCodeInput] = useState('');
   const [couponError, setCouponError] = useState('');
+  const [bannerIdx, setBannerIdx] = useState(0);
+
+  const banners = [
+    { title: "More Cheese. More Happiness.", desc: "Hot, cheesy and baked with love, just for you.", bg: "from-purple-900 to-indigo-900" },
+    { title: "Exclusive Combos", desc: "Save up to 30% OFF on selected family combos!", bg: "from-indigo-900 to-purple-950" },
+    { title: "Fresh Desserts & Shakes", desc: "Sweet endings to make your day happier.", bg: "from-purple-950 to-purple-900" }
+  ];
+
+  // Auto scroll banner
+  useEffect(() => {
+    const t = setInterval(() => setBannerIdx(p => (p + 1) % banners.length), 4000);
+    return () => clearInterval(t);
+  }, [banners.length]);
 
   const cats = ['All', ...new Set(menuItems.map(i => i.category))]; 
   const [activeCat, setActiveCat] = useState('All');
@@ -407,22 +417,12 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
 
   const chg = (k, d) => { playSfx(d > 0 ? 'add' : 'remove'); setCart(p => p.map(c => c.key === k ? { ...c, qty: c.qty + d } : c).filter(c => c.qty > 0)); };
 
-  const applyCoupon = (c) => {
-    playSfx('click');
-    setSelectedCoupon(c);
-    setCouponError('');
-  };
+  const applyCoupon = (c) => { playSfx('click'); setSelectedCoupon(c); setCouponError(''); };
 
   const verifyCouponCode = () => {
     const found = coupons.find(c => c.code.toLowerCase() === couponCodeInput.trim().toLowerCase());
-    if (found) {
-      playSfx('success');
-      setSelectedCoupon(found);
-      setCouponError('');
-    } else {
-      playSfx('error');
-      setCouponError('Invalid Coupon Code');
-    }
+    if (found) { playSfx('success'); setSelectedCoupon(found); setCouponError(''); }
+    else { playSfx('error'); setCouponError('Invalid Coupon Code'); }
   };
 
   const displayedMenu = activeCat === 'All' ? menuItems : menuItems.filter(i => i.category === activeCat);
@@ -438,10 +438,27 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
             <div className="bg-purple-950/50 px-4 py-1.5 rounded-full border border-purple-700/50"><h1 className="text-sm font-black tracking-widest uppercase text-purple-200">Table {tableNumber} | {customerName || 'Guest'}</h1></div>
             <div className="w-9 h-9" />
           </div>
-          <div className="flex overflow-x-auto gap-2 pb-2 scrollbar-hide">{cats.map(c => <button key={c} onClick={() => { playSfx('click'); setActiveCat(c); }} className={`whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-bold shrink-0 transition-colors ${activeCat === c ? 'bg-white text-purple-900 shadow-md' : 'bg-purple-800/80 text-purple-200'}`}>{c}</button>)}</div>
+          {/* Categories with Image Icons */}
+          <div className="flex overflow-x-auto gap-2 pb-2 scrollbar-hide">
+            <button onClick={() => { playSfx('click'); setActiveCat('All'); }} className={`whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-bold shrink-0 transition-colors ${activeCat === 'All' ? 'bg-white text-purple-900 shadow-md' : 'bg-purple-800/80 text-purple-200'}`}>All</button>
+            {cats.filter(c => c !== 'All').map(c => (
+              <button key={c} onClick={() => { playSfx('click'); setActiveCat(c); }} className={`whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-bold shrink-0 transition-colors flex items-center gap-1.5 ${activeCat === c ? 'bg-white text-purple-900 shadow-md' : 'bg-purple-800/80 text-purple-200'}`}>
+                <span>{c}</span>
+              </button>
+            ))}
+          </div>
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 bg-slate-100">
+          {/* Auto-scrolling Banner */}
+          <div className={`w-full rounded-3xl bg-gradient-to-r ${banners[bannerIdx].bg} text-white p-5 mb-5 shadow-lg relative overflow-hidden transition-all duration-700`}>
+            <h2 className="text-xl font-black mb-1">{banners[bannerIdx].title}</h2>
+            <p className="text-xs text-purple-200 font-medium mb-3">{banners[bannerIdx].desc}</p>
+            <div className="flex gap-1.5">
+              {banners.map((_, i) => <div key={i} className={`h-1.5 rounded-full transition-all ${bannerIdx === i ? 'w-6 bg-white' : 'w-1.5 bg-white/40'}`}></div>)}
+            </div>
+          </div>
+
           {status === 'Verifying' && <PaymentTimer order={tableOrder} />}
           {status === 'Pending' && <div className="bg-purple-100 border-l-4 border-purple-600 text-purple-900 p-4 rounded-2xl mb-4 shadow-sm"><p className="font-black text-lg">Order Placed!</p><p className="text-sm opacity-80">Waiting for restaurant confirmation.</p></div>}
           {status === 'Preparing' && <div className="bg-blue-100 border-l-4 border-blue-600 text-blue-900 p-4 rounded-2xl mb-4 shadow-sm"><p className="font-black text-lg">Preparing Order 👨‍🍳</p><p className="text-sm opacity-80">Kitchen is cooking your delicious meal.</p></div>}
@@ -690,14 +707,10 @@ function CouponsTab({ coupons, db }) {
     if (!code.trim()) return playSfx('error');
     playSfx('save');
     await setDoc(doc(db, 'coupons', 'c_' + Date.now()), { code: code.trim().toUpperCase(), discount: Number(discount) });
-    setCode('');
-    setDiscount(10);
+    setCode(''); setDiscount(10);
   };
 
-  const deleteCoupon = async (id) => {
-    playSfx('del');
-    await deleteDoc(doc(db, 'coupons', id));
-  };
+  const deleteCoupon = async (id) => { playSfx('del'); await deleteDoc(doc(db, 'coupons', id)); };
 
   return (
     <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 max-w-xl">
@@ -720,7 +733,7 @@ function CouponsTab({ coupons, db }) {
   );
 }
 
-/* ---------------- MENU CRUD TAB WITH VARIANTS & INGREDIENTS ---------------- */
+/* ---------------- MENU CRUD TAB WITH SEPARATE VARIANTS & PRICE ---------------- */
 function MenuTab({ menuItems, db }) {
   const [edit, setEdit] = useState(undefined);
   const [search, setSearch] = useState('');
@@ -772,7 +785,7 @@ function MenuTab({ menuItems, db }) {
             <tr key={it.id} className="hover:bg-slate-50">
               <td className="p-3 pl-6"><div className="w-10 h-10 bg-slate-200 rounded-xl overflow-hidden flex items-center justify-center">{it.img ? <img src={it.img} alt="" className="w-full h-full object-cover" /> : <ImageIcon className="w-4 h-4 text-slate-400" />}</div></td>
               <td className="p-3"><p className="font-bold text-slate-900 text-sm">{it.name}</p><p className="text-[11px] text-slate-500">{it.category}</p></td>
-              <td className="p-3 font-black text-purple-700 text-sm">₹{it.v ? it.v.map(x => x[1]).join(' / ') : it.price}</td>
+              <td className="p-3 font-black text-purple-700 text-sm">₹{it.v ? it.v.map(x => `${x[0]}: ₹${x[1]}`).join(', ') : it.price}</td>
               <td className="p-3 text-xs font-bold text-slate-600">Cost: ₹{totalIngCost} | <span className={profit >= 0 ? 'text-green-600' : 'text-red-600'}>Profit: ₹{profit}</span></td>
               <td className="p-3"><button onClick={() => toggleStock(it)} className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border ${it.stock ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{it.stock ? <ToggleRight className="w-3.5 h-3.5" /> : <ToggleLeft className="w-3.5 h-3.5" />}{it.stock ? 'In Stock' : 'Out'}</button></td>
               <td className="p-3 pr-6 text-right"><div className="flex justify-end gap-1.5"><button onClick={() => { playSfx('click'); setEdit(it); }} className="p-2 text-slate-400 hover:text-purple-700 bg-slate-50 rounded-xl"><Edit className="w-4 h-4" /></button><DelBtn onDel={() => deleteItem(it.id)} /></div></td>
@@ -791,10 +804,22 @@ function MenuForm({ item, categories, descriptions, onSave, onClose }) {
   const [price, setPrice] = useState(item?.price || 100);
   const [desc, setDesc] = useState(item?.desc || '');
   const [hasVariants, setHasVariants] = useState(!!item?.v);
-  const [variants, setVariants] = useState(item?.v ? item.v.map(x => `${x[0]}:${x[1]}`).join(', ') : 'Small:100, Medium:150, Large:200');
+  const [variantSize, setVariantSize] = useState('Small');
+  const [variantPrice, setVariantPrice] = useState(100);
+  const [variantList, setVariantList] = useState(item?.v || []);
   const [ingredients, setIngredients] = useState(item?.ingredients || [{ name: '', cost: '' }]);
   const [img, setImg] = useState(item?.img || '');
   const fileRef = useRef(null);
+
+  const addVariantItem = () => {
+    if (!variantSize || isNaN(variantPrice)) return;
+    setVariantList([...variantList, [variantSize, Number(variantPrice)]]);
+    setVariantPrice(100);
+  };
+
+  const removeVariantItem = (idx) => {
+    setVariantList(variantList.filter((_, i) => i !== idx));
+  };
 
   const addIngredient = () => setIngredients([...ingredients, { name: '', cost: '' }]);
   const updateIngredient = (index, field, value) => {
@@ -807,14 +832,7 @@ function MenuForm({ item, categories, descriptions, onSave, onClose }) {
   const submit = (e) => {
     e.preventDefault();
     if (!name.trim() || !category.trim()) return playSfx('error');
-    
-    let parsedVariants = null;
-    if (hasVariants) {
-      parsedVariants = variants.split(',').map(s => s.trim()).filter(Boolean).map(s => {
-        const [l, p] = s.split(':');
-        return [l.trim(), Number(p)];
-      }).filter(x => x[0] && !isNaN(x[1]));
-    }
+    if (!hasVariants && isNaN(price)) return playSfx('error');
 
     const cleanIngredients = ingredients.filter(i => i.name.trim() && !isNaN(i.cost)).map(i => ({ name: i.name.trim(), cost: Number(i.cost) }));
 
@@ -823,8 +841,8 @@ function MenuForm({ item, categories, descriptions, onSave, onClose }) {
       category: category.trim(),
       desc: desc.trim(),
       img,
-      price: parsedVariants && parsedVariants.length ? parsedVariants[0][1] : Number(price),
-      v: parsedVariants && parsedVariants.length > 0 ? parsedVariants : null,
+      price: hasVariants && variantList.length > 0 ? variantList[0][1] : Number(price),
+      v: hasVariants && variantList.length > 0 ? variantList : null,
       ingredients: cleanIngredients,
       stock: item ? item.stock : true
     });
@@ -846,13 +864,32 @@ function MenuForm({ item, categories, descriptions, onSave, onClose }) {
 
         <div className="flex items-center gap-2 bg-purple-50 p-3 rounded-xl border border-purple-100">
           <input type="checkbox" id="hasVar" checked={hasVariants} onChange={e => setHasVariants(e.target.checked)} className="w-4 h-4 accent-purple-600" />
-          <label htmlFor="hasVar" className="text-xs font-bold text-purple-900 cursor-pointer">Has Size Variants (Small, Medium, Large, Half, Full)?</label>
+          <label htmlFor="hasVar" className="text-xs font-bold text-purple-900 cursor-pointer">Has Size Variants?</label>
         </div>
 
         {hasVariants && (
-          <div>
-            <label className="text-xs font-bold text-slate-500 uppercase">Variants Format (Size:Price)</label>
-            <input value={variants} onChange={e => setVariants(e.target.value)} placeholder="Small:100, Medium:150, Large:200" className={inpStyle + ' text-xs'} />
+          <div className="bg-slate-50 p-3 rounded-2xl border space-y-3">
+            <label className="text-xs font-black text-slate-700 uppercase">Add Size & Price</label>
+            <div className="flex gap-2">
+              <select value={variantSize} onChange={e => setVariantSize(e.target.value)} className="border rounded-xl px-3 py-2 text-xs font-bold bg-white">
+                <option value="Small">Small</option>
+                <option value="Medium">Medium</option>
+                <option value="Large">Large</option>
+                <option value="Half">Half</option>
+                <option value="Full">Full</option>
+                <option value="Regular">Regular</option>
+              </select>
+              <input type="number" value={variantPrice} onChange={e => setVariantPrice(e.target.value)} placeholder="Price (₹)" className="flex-1 border rounded-xl px-3 py-2 text-xs font-bold bg-white" />
+              <button type="button" onClick={addVariantItem} className="bg-purple-700 text-white px-4 py-2 rounded-xl text-xs font-bold">Add</button>
+            </div>
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {variantList.map((v, i) => (
+                <div key={i} className="bg-purple-100 text-purple-900 px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-2">
+                  <span>{v[0]}: ₹{v[1]}</span>
+                  <button type="button" onClick={() => removeVariantItem(i)} className="text-red-500 font-bold">×</button>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
