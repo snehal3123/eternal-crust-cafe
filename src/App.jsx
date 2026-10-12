@@ -194,7 +194,6 @@ export default function App() {
     await deleteDoc(doc(db, 'orders', o.id));
     playSfx('save');
 
-    // Send WhatsApp Bill matching Cash Memo format with proper date & time
     if (o.customerPhone) {
       const dObj = new Date(completedAt);
       const dateStr = dObj.toLocaleDateString();
@@ -206,7 +205,6 @@ export default function App() {
       window.open(wpUrl, '_blank');
     }
 
-    // Auto exit table session after sending bill
     exitTable();
   };
 
@@ -367,7 +365,7 @@ function AdminLoginModal({ onClose, onSuccess }) {
   );
 }
 
-/* ---------------- CUSTOMER VIEW WITH PIZZA HUT STYLE BANNER & CATEGORY IMAGES ---------------- */
+/* ---------------- CUSTOMER VIEW (PIZZA HUT STYLE CARD & ADD BUTTON INSIDE CARD) ---------------- */
 function CustomerView({ tableNumber, customerName, customerPhone, menuItems, activeOrders, coupons, cafeConfig, onPlaceOrder, onExit }) {
   const [cart, setCart] = useState([]); 
   const [checkout, setCheckout] = useState(false);
@@ -384,7 +382,6 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
 
   const banners = (cafeConfig.banners && cafeConfig.banners.length > 0) ? cafeConfig.banners : defaultBanners;
 
-  // Auto scroll banner every 4 seconds
   useEffect(() => {
     const t = setInterval(() => setBannerIdx(p => (p + 1) % banners.length), 4000);
     return () => clearInterval(t);
@@ -494,20 +491,20 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
 
           <div className="space-y-3 pb-24">
             {displayedMenu.filter(i => i.stock).map(it => (
-              <div key={it.id} className="bg-white p-3 rounded-2xl shadow-sm border border-slate-200 flex gap-3">
+              <div key={it.id} className="bg-white p-3 rounded-2xl shadow-sm border border-slate-200 flex gap-3 relative">
                 <div className="w-20 h-20 bg-slate-100 rounded-xl overflow-hidden shrink-0 flex items-center justify-center">{it.img ? <img src={it.img} alt="" className="w-full h-full object-cover" /> : <ImageIcon className="w-8 h-8 text-slate-300" />}</div>
                 <div className="flex-1 flex flex-col justify-between py-1">
                   <div>
-                    <h3 className="font-black text-slate-900 leading-tight">{it.name}</h3>
+                    <h3 className="font-black text-slate-900 leading-tight pr-12">{it.name}</h3>
                     {it.desc && <p className="text-[11px] text-slate-500 font-medium leading-tight mt-0.5">{it.desc}</p>}
                     
-                    {/* Size Variants Display */}
+                    {/* Size Variants Display inside card */}
                     {it.v && it.v.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 mt-2">
+                      <div className="flex flex-wrap gap-1 mt-2">
                         {it.v.map((x, i) => (
-                          <button key={i} onClick={() => addVariant(it, x[0], x[1])} className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg text-xs font-bold border border-purple-200 active:scale-95 flex flex-col items-start">
-                            <span className="text-[10px] text-purple-500 uppercase">{x[0]}</span>
-                            <span>₹{x[1]}</span>
+                          <button key={i} onClick={() => addVariant(it, x[0], x[1])} className="px-2 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg text-[10px] font-bold border border-purple-200 active:scale-95 flex items-center gap-1">
+                            <span>{x[0]}</span>
+                            <span className="text-purple-900 font-black">₹{x[1]}</span>
                           </button>
                         ))}
                       </div>
@@ -517,7 +514,7 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
                   {!it.v && (
                     <div className="flex justify-between items-end mt-1">
                       <span className="font-black text-purple-700 text-lg">₹{it.price}</span>
-                      <button onClick={() => addSimple(it)} className="bg-purple-100 text-purple-800 px-4 py-1.5 rounded-xl text-xs font-bold active:scale-95 hover:bg-purple-200">Add +</button>
+                      <button onClick={() => addSimple(it)} className="bg-purple-100 text-purple-800 px-4 py-1.5 rounded-xl text-xs font-bold active:scale-95 hover:bg-purple-200 shadow-sm">Add +</button>
                     </div>
                   )}
                 </div>
@@ -756,7 +753,7 @@ function CouponsTab({ coupons, db }) {
   );
 }
 
-/* ---------------- MENU CRUD TAB WITH FIXED SAVE & VARIANTS ---------------- */
+/* ---------------- MENU CRUD TAB WITH FIXED SAVE FORM ---------------- */
 function MenuTab({ menuItems, db }) {
   const [edit, setEdit] = useState(undefined);
   const [search, setSearch] = useState('');
@@ -874,7 +871,7 @@ function MenuForm({ item, categories, descriptions, onSave, onClose }) {
 
   return (
     <Modal title={item?.id ? 'Edit Menu Item' : 'New Menu Item'} onClose={onClose}>
-      <form onSubmit={submit} className="space-y-4 max-h-[75vh] overflow-y-auto pr-2">
+      <form onSubmit={submit} className="space-y-4">
         <div><label className="text-xs font-bold text-slate-500 uppercase">Item Name</label><input value={name} onChange={e => setName(e.target.value)} className={inpStyle} required /></div>
         
         <div className="grid grid-cols-2 gap-3">
