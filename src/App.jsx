@@ -60,26 +60,8 @@ const readImg = (f) => new Promise((res) => {
 });
 
 const initialMenu = [
-  { id: 'p1', category: 'Pizza', name: 'Small Pizza', price: 139, stock: true },
-  { id: 'p2', category: 'Pizza', name: 'Classic Margarita Pizza', price: 149, v: [['Small', 149], ['Medium', 169], ['Large', 189]], ingredients: [{ name: 'Pizza Base', cost: 30 }, { name: 'Cheese', cost: 40 }], stock: true },
-  { id: 'p3', category: 'Pizza', name: 'Paneer Mushroom Pizza', price: 169, v: [['Small', 169], ['Medium', 179], ['Large', 189]], stock: true },
-  { id: 'gb1', category: 'Garlic Bread', name: 'Classic Garlic Bread', price: 99, stock: true },
-  { id: 'pa1', category: 'Pasta', name: 'Penne Arrabiata Pasta', price: 139, stock: true },
-  { id: 'f1', category: 'Fries', name: 'Classic Fries', price: 79, stock: true },
-  { id: 's1', category: 'Sandwich', name: 'Vegetable Sandwich', price: 69, stock: true },
-  { id: 'mg1', category: 'Maggie', name: 'Masala Maggie', price: 49, stock: true },
-  { id: 'pn1', category: 'Panini', name: 'Classic Panini', price: 129, stock: true },
-  { id: 'b1', category: 'Burger', name: 'Vegetable Burger', price: 89, stock: true },
-  { id: 'mo1', category: 'Momos', name: 'Vegetable Momos', price: 99, stock: true },
-  { id: 'fr1', category: 'Frankie', name: 'Noodles Frankie', price: 79, stock: true },
-  { id: 'co1', category: 'Combos', name: 'Pizza Combo', price: 359, desc: '1 Regular Pizza, 1 Classic Garlic Bread, Peri Peri Fries, Coke (500ml)', stock: true },
-  { id: 'bev1', category: 'Beverages', name: 'Hot Tea', price: 19, stock: true },
-  { id: 'wf1', category: 'Waffles', name: 'Classic Waffle', price: 89, stock: true },
-  { id: 'ds1', category: 'Desserts', name: 'Sizzling Brownie', price: 199, stock: true },
-  { id: 'sc1', category: 'Scoop Ice Cream', name: '1 Scoop', price: 59, stock: true },
-  { id: 'mk1', category: 'Mocktails', name: 'Ice Honey Lime Soda', price: 99, stock: true },
-  { id: 'ts1', category: 'Thick Shakes', name: 'Chocolate Thick Milkshake', price: 149, stock: true },
-  { id: 'lt1', category: 'Lattes', name: 'Spanish Ice Latte', price: 159, stock: true }
+  { id: 'p1', category: 'Pizza', name: 'Small Pizza', price: 139, stock: true, ingredients: [{ name: 'Pizza Base', cost: 30 }, { name: 'Cheese', cost: 40 }] },
+  { id: 'p2', category: 'Pizza', name: 'Classic Margarita Pizza', price: 149, v: [['Regular', 149], ['Large', 189]], stock: true, ingredients: [{ name: 'Base', cost: 35 }, { name: 'Mozzarella', cost: 50 }] }
 ];
 
 const initialStock = [{ id: 'i1', name: 'Pizza Base', qty: 40, price: 500, min: 10 }, { id: 'i2', name: 'Burger Buns', qty: 30, price: 300, min: 10 }];
@@ -125,10 +107,23 @@ export default function App() {
   const [coupons, setCoupons] = useState([]);
   const [cafeLogo, setCafeLogo] = useState('');
 
+  // Daily 11 PM stock update reminder check
   useEffect(() => {
-    const unsubMenu = onSnapshot(collection(db, 'eternal_menu_v3'), (snap) => {
+    const checkReminder = () => {
+      const now = new Date();
+      if (now.getHours() === 23 && now.getMinutes() === 0) {
+        speak("Reminder! Please update your daily inventory stocks.");
+        alert("🌙 Nightly Reminder: Please update your inventory stocks for the day!");
+      }
+    };
+    const t = setInterval(checkReminder, 60000);
+    return () => clearInterval(t);
+  }, []);
+
+  useEffect(() => {
+    const unsubMenu = onSnapshot(collection(db, 'eternal_menu_v2'), (snap) => {
       if (snap.empty) {
-        initialMenu.forEach(item => setDoc(doc(db, 'eternal_menu_v3', item.id), item));
+        initialMenu.forEach(item => setDoc(doc(db, 'eternal_menu_v2', item.id), item));
       } else {
         setMenuItems(snap.docs.map(d => ({ ...d.data(), id: d.id })));
       }
@@ -185,20 +180,10 @@ export default function App() {
     return () => document.removeEventListener('click', unlock);
   }, []);
 
-  const placeOrder = async (tbl, cart, total, payment, cName, cPhone, discountApplied) => {
+  const placeOrder = async (tbl, cart, total, payment, name, phone, discount = 0) => {
     const numericId = Math.floor(10000 + Math.random() * 90000).toString();
-    const newOrder = {
-      id: numericId,
-      table: tbl,
-      customerName: cName,
-      customerPhone: cPhone,
-      items: cart,
-      total,
-      discount: discountApplied || 0,
-      payment,
-      status: payment === 'Online' ? 'Verifying' : 'Pending',
-      time: Date.now()
-    };
+    const finalTotal = Math.max(0, total - discount);
+    const newOrder = { id: numericId, table: tbl, customerName: name, customerPhone: phone, items: cart, total: finalTotal, originalTotal: total, discount, payment, status: payment === 'Online' ? 'Verifying' : 'Pending', time: Date.now() };
     await setDoc(doc(db, 'orders', numericId), newOrder);
     playSfx('success');
   };
@@ -209,23 +194,10 @@ export default function App() {
     await deleteDoc(doc(db, 'orders', o.id));
     playSfx('save');
 
-    // Send WhatsApp Bill Message to Customer
+    // Send WhatsApp Bill
     if (o.customerPhone) {
-      let msg = `*${CAFE_NAME}* - Cash Memo\n`;
-      msg += `--------------------------------\n`;
-      msg += `Date: ${new Date(completedData.completedAt).toLocaleDateString()} | Bill No: #${o.id}\n`;
-      msg += `T.No.: ${o.table} | Cust: ${o.customerName || 'Guest'}\n`;
-      msg += `--------------------------------\n`;
-      msg += `Particulars           Qty   Rate   Amt\n`;
-      o.items.forEach(item => {
-        msg += `${item.name.padEnd(20)} ${String(item.qty).padEnd(3)} ₹${String(item.price).padEnd(5)} ₹${item.price * item.qty}\n`;
-      });
-      msg += `--------------------------------\n`;
-      if (o.discount > 0) msg += `Discount Applied: -₹${o.discount}\n`;
-      msg += `*Total Amount : ₹${o.total}*\n`;
-      msg += `--------------------------------\n`;
-      msg += `E.&O.E.     Thank You     Visit Again`;
-
+      const itemsList = o.items.map(i => `${i.qty}x ${i.name} - ₹${i.price * i.qty}`).join('\n');
+      const msg = `*${CAFE_NAME}* \n${CAFE_ADDRESS}\n--------------------\n*CASH MEMO*\nDate: ${new Date(o.completedAt).toLocaleDateString()}\nBill No: #${o.id}\nTable No: ${o.table}\nCustomer: ${o.customerName || 'Guest'}\n--------------------\n*Particulars | Qty | Amt*\n${o.items.map(i => `${i.name} | ${i.qty} | ₹${i.price * i.qty}`).join('\n')}\n--------------------\n*Total Amount: ₹${o.total}*\n--------------------\nThank You! Visit Again ✨`;
       const wpUrl = `https://wa.me/91${o.customerPhone}?text=${encodeURIComponent(msg)}`;
       window.open(wpUrl, '_blank');
     }
@@ -236,14 +208,14 @@ export default function App() {
     playSfx('del');
   };
 
-  const joinTable = (tblName, cName, cPhone) => {
+  const joinTable = (tblName, name, phone) => {
     setTable(tblName);
-    setCustomerName(cName);
-    setCustomerPhone(cPhone);
+    setCustomerName(name);
+    setCustomerPhone(phone);
     setSessionTable(tblName);
     localStorage.setItem('ec_active_table', tblName);
-    localStorage.setItem('ec_cust_name', cName);
-    localStorage.setItem('ec_cust_phone', cPhone);
+    localStorage.setItem('ec_cust_name', name);
+    localStorage.setItem('ec_cust_phone', phone);
     setMode('customer');
   };
 
@@ -297,12 +269,12 @@ function DelBtn({ onDel }) {
   return <button onClick={() => { playSfx('click'); if (a) onDel(); else setA(true); }} className={`p-2 rounded-xl transition-colors text-xs font-black shrink-0 ${a ? 'bg-red-600 text-white' : 'bg-slate-50 text-slate-400 hover:text-red-600 hover:bg-red-50'}`}>{a ? 'Sure?' : <Trash2 className="w-4 h-4" />}</button>;
 }
 
-/* ---------------- LANDING VIEW WITH NAME & PHONE INPUT ---------------- */
+/* ---------------- LANDING VIEW WITH DETAILS ---------------- */
 function LandingView({ tables, activeOrders, logo, onJoin, onAdminLogin }) {
   const [showLogin, setShowLogin] = useState(false);
   const [wi, setWi] = useState(0);
-  const [cName, setCName] = useState('');
-  const [cPhone, setCPhone] = useState('');
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
   const [showModal, setShowModal] = useState(false);
 
   const sortedTables = useMemo(() => {
@@ -317,11 +289,11 @@ function LandingView({ tables, activeOrders, logo, onJoin, onAdminLogin }) {
     setShowModal(true);
   };
 
-  const confirmJoin = (e) => {
+  const handleProceed = (e) => {
     e.preventDefault();
-    if (!cName.trim() || cPhone.length < 10) return playSfx('error');
+    if (!name.trim() || !phone.trim() || phone.length < 10) return playSfx('error');
     playSfx('success');
-    onJoin(currentTable.name, cName.trim(), cPhone.trim());
+    onJoin(currentTable.name, name.trim(), phone.trim());
   };
 
   return (
@@ -365,10 +337,10 @@ function LandingView({ tables, activeOrders, logo, onJoin, onAdminLogin }) {
 
       {showModal && (
         <Modal title={`Join Table ${currentTable.name}`} onClose={() => setShowModal(false)}>
-          <form onSubmit={confirmJoin} className="space-y-4">
-            <div><label className="text-xs font-bold text-slate-500 uppercase">Your Name</label><input type="text" value={cName} onChange={e => setCName(e.target.value)} placeholder="e.g. Rahul Sharma" className={inpStyle} required /></div>
-            <div><label className="text-xs font-bold text-slate-500 uppercase">WhatsApp Phone Number</label><input type="tel" value={cPhone} onChange={e => setCPhone(e.target.value)} placeholder="e.g. 9876543210" className={inpStyle} required /></div>
-            <button type="submit" className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-4 rounded-xl mt-2">Continue to Menu</button>
+          <form onSubmit={handleProceed} className="space-y-4">
+            <div><label className="text-xs font-bold text-slate-500 uppercase">Your Name</label><input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Rahul Sharma" className={inpStyle} required /></div>
+            <div><label className="text-xs font-bold text-slate-500 uppercase">WhatsApp Phone Number</label><input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="e.g. 9876543210" className={inpStyle} required maxLength={10} /></div>
+            <button type="submit" className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-4 rounded-xl mt-2 shadow-lg">Start Ordering</button>
           </form>
         </Modal>
       )}
@@ -392,22 +364,24 @@ function AdminLoginModal({ onClose, onSuccess }) {
   );
 }
 
-/* ---------------- CUSTOMER VIEW (ALL MENU BY DEFAULT + VARIANTS + COUPONS) ---------------- */
+/* ---------------- CUSTOMER VIEW (ALL MENU DEFAULT, COUPONS & PAID AMOUNT) ---------------- */
 function CustomerView({ tableNumber, customerName, customerPhone, menuItems, activeOrders, coupons, onPlaceOrder, onExit }) {
   const [cart, setCart] = useState([]); 
   const [checkout, setCheckout] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedCoupon, setSelectedCoupon] = useState(null);
-  const [variantModalItem, setVariantModalItem] = useState(null);
+  const [couponCodeInput, setCouponCodeInput] = useState('');
+  const [couponError, setCouponError] = useState('');
 
-  const categories = ['All', ...new Set(menuItems.map(i => i.category))];
+  const cats = ['All', ...new Set(menuItems.map(i => i.category))]; 
+  const [activeCat, setActiveCat] = useState('All');
+
+  const rawTotal = cart.reduce((s, c) => s + c.price * c.qty, 0); 
+  const discountAmount = selectedCoupon ? Math.round((rawTotal * selectedCoupon.discount) / 100) : 0;
+  const total = Math.max(0, rawTotal - discountAmount);
+  const count = cart.reduce((s, c) => s + c.qty, 0);
+
   const tableOrder = activeOrders.find(o => o.table === String(tableNumber));
   const status = tableOrder ? tableOrder.status : null;
-
-  const rawTotal = cart.reduce((s, c) => s + c.price * c.qty, 0);
-  const discountAmt = selectedCoupon ? Math.round((rawTotal * selectedCoupon.discount) / 100) : 0;
-  const total = Math.max(0, rawTotal - discountAmt);
-  const count = cart.reduce((s, c) => s + c.qty, 0);
 
   const prevStatus = useRef(status);
   useEffect(() => {
@@ -418,27 +392,40 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
     prevStatus.current = status;
   }, [status, tableNumber]);
 
-  const addDirect = (item) => {
-    if (item.v && item.v.length > 0) {
-      setVariantModalItem(item);
-    } else {
-      playSfx('add');
-      const k = item.id + '_regular';
-      setCart(p => p.find(c => c.key === k) ? p.map(c => c.key === k ? { ...c, qty: c.qty + 1 } : c) : [...p, { key: k, name: item.name, price: item.price, qty: 1 }]);
-    }
+  const addVariant = (item, vName, vPrice) => {
+    playSfx('add');
+    const k = item.id + '_' + vName;
+    const nm = `${item.name} (${vName})`;
+    setCart(p => p.find(c => c.key === k) ? p.map(c => c.key === k ? { ...c, qty: c.qty + 1 } : c) : [...p, { key: k, name: nm, price: vPrice, qty: 1 }]);
   };
 
-  const addVariant = (item, sizeName, sizePrice) => {
+  const addSimple = (item) => {
     playSfx('add');
-    const nm = `${item.name} (${sizeName})`;
-    const k = item.id + '_' + sizeName;
-    setCart(p => p.find(c => c.key === k) ? p.map(c => c.key === k ? { ...c, qty: c.qty + 1 } : c) : [...p, { key: k, name: nm, price: sizePrice, qty: 1 }]);
-    setVariantModalItem(null);
+    const k = item.id;
+    setCart(p => p.find(c => c.key === k) ? p.map(c => c.key === k ? { ...c, qty: c.qty + 1 } : c) : [...p, { key: k, name: item.name, price: item.price, qty: 1 }]);
   };
 
   const chg = (k, d) => { playSfx(d > 0 ? 'add' : 'remove'); setCart(p => p.map(c => c.key === k ? { ...c, qty: c.qty + d } : c).filter(c => c.qty > 0)); };
 
-  const displayedMenu = selectedCategory === 'All' ? menuItems : menuItems.filter(i => i.category === selectedCategory);
+  const applyCoupon = (c) => {
+    playSfx('click');
+    setSelectedCoupon(c);
+    setCouponError('');
+  };
+
+  const verifyCouponCode = () => {
+    const found = coupons.find(c => c.code.toLowerCase() === couponCodeInput.trim().toLowerCase());
+    if (found) {
+      playSfx('success');
+      setSelectedCoupon(found);
+      setCouponError('');
+    } else {
+      playSfx('error');
+      setCouponError('Invalid Coupon Code');
+    }
+  };
+
+  const displayedMenu = activeCat === 'All' ? menuItems : menuItems.filter(i => i.category === activeCat);
 
   return (
     <div className="bg-purple-950 fixed inset-0 flex justify-center overflow-hidden">
@@ -448,16 +435,10 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
             {onExit && status !== 'Pending' && status !== 'Preparing' && status !== 'Verifying' ? (
               <button onClick={() => { playSfx('click'); onExit(); }} className="p-2 -ml-2 bg-purple-800 rounded-full flex items-center gap-1 text-xs font-bold"><ChevronLeft className="w-4 h-4" /> Exit</button>
             ) : <div className="w-9 h-9" />}
-            <div className="bg-purple-950/50 px-4 py-1.5 rounded-full border border-purple-700/50"><h1 className="text-sm font-black tracking-widest uppercase text-purple-200">Table {tableNumber} ({customerName})</h1></div>
+            <div className="bg-purple-950/50 px-4 py-1.5 rounded-full border border-purple-700/50"><h1 className="text-sm font-black tracking-widest uppercase text-purple-200">Table {tableNumber} | {customerName || 'Guest'}</h1></div>
             <div className="w-9 h-9" />
           </div>
-          <div className="flex overflow-x-auto gap-2 pb-2 scrollbar-hide">
-            {categories.map(c => (
-              <button key={c} onClick={() => { playSfx('click'); setSelectedCategory(c); }} className={`whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-bold shrink-0 transition-colors ${selectedCategory === c ? 'bg-white text-purple-900 shadow-md' : 'bg-purple-800/80 text-purple-200'}`}>
-                {c}
-              </button>
-            ))}
-          </div>
+          <div className="flex overflow-x-auto gap-2 pb-2 scrollbar-hide">{cats.map(c => <button key={c} onClick={() => { playSfx('click'); setActiveCat(c); }} className={`whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-bold shrink-0 transition-colors ${activeCat === c ? 'bg-white text-purple-900 shadow-md' : 'bg-purple-800/80 text-purple-200'}`}>{c}</button>)}</div>
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 bg-slate-100">
@@ -465,10 +446,9 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
           {status === 'Pending' && <div className="bg-purple-100 border-l-4 border-purple-600 text-purple-900 p-4 rounded-2xl mb-4 shadow-sm"><p className="font-black text-lg">Order Placed!</p><p className="text-sm opacity-80">Waiting for restaurant confirmation.</p></div>}
           {status === 'Preparing' && <div className="bg-blue-100 border-l-4 border-blue-600 text-blue-900 p-4 rounded-2xl mb-4 shadow-sm"><p className="font-black text-lg">Preparing Order 👨‍🍳</p><p className="text-sm opacity-80">Kitchen is cooking your delicious meal.</p></div>}
           {status === 'Ready' && <div className="bg-green-100 border-l-4 border-green-600 text-green-900 p-4 rounded-2xl mb-4 shadow-sm animate-bounce"><p className="font-black text-xl">Your Order is Ready! 🎉</p><p className="text-sm opacity-80">Please pick it up from the counter.</p></div>}
-          {tableOrder && tableOrder.status !== 'Verifying' && tableOrder.status !== 'Pending' && tableOrder.status !== 'Preparing' && tableOrder.status !== 'Ready' && (
-            <div className="bg-emerald-100 border-l-4 border-emerald-600 text-emerald-900 p-4 rounded-2xl mb-4 shadow-sm">
-              <p className="font-black text-base">Payment Verified! ✅</p>
-              <p className="text-sm font-medium">You successfully paid ₹{tableOrder.total}.</p>
+          {tableOrder && (status === 'Preparing' || status === 'Ready' || status === 'Completed') && (
+            <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 p-3 rounded-2xl mb-4 text-xs font-bold">
+              ✅ Payment Verified! Successfully paid ₹{tableOrder.total} via {tableOrder.payment}.
             </div>
           )}
 
@@ -480,20 +460,26 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
                   <div>
                     <h3 className="font-black text-slate-900 leading-tight">{it.name}</h3>
                     {it.desc && <p className="text-[11px] text-slate-500 font-medium leading-tight mt-0.5">{it.desc}</p>}
-                    {it.v && (
-                      <div className="flex flex-wrap gap-1 mt-1">
+                    
+                    {/* Size Variants Display */}
+                    {it.v && it.v.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
                         {it.v.map((x, i) => (
-                          <span key={i} className="text-[10px] font-bold bg-purple-50 text-purple-700 px-2 py-0.5 rounded-md border border-purple-100">
-                            {x[0]}: ₹{x[1]}
-                          </span>
+                          <button key={i} onClick={() => addVariant(it, x[0], x[1])} className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg text-xs font-bold border border-purple-200 active:scale-95 flex flex-col items-start">
+                            <span className="text-[10px] text-purple-500 uppercase">{x[0]}</span>
+                            <span>₹{x[1]}</span>
+                          </button>
                         ))}
                       </div>
                     )}
                   </div>
-                  <div className="flex justify-between items-end mt-1">
-                    <span className="font-black text-purple-700 text-lg">₹{it.price}</span>
-                    <button onClick={() => addDirect(it)} className="bg-purple-100 text-purple-800 px-4 py-1.5 rounded-xl text-xs font-bold active:scale-95 hover:bg-purple-200">Add +</button>
-                  </div>
+
+                  {!it.v && (
+                    <div className="flex justify-between items-end mt-1">
+                      <span className="font-black text-purple-700 text-lg">₹{it.price}</span>
+                      <button onClick={() => addSimple(it)} className="bg-purple-100 text-purple-800 px-4 py-1.5 rounded-xl text-xs font-bold active:scale-95 hover:bg-purple-200">Add +</button>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -506,48 +492,43 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
           </div>
         )}
 
-        {variantModalItem && (
-          <Modal title={`Select Size for ${variantModalItem.name}`} onClose={() => setVariantModalItem(null)}>
-            <div className="space-y-3">
-              {variantModalItem.v.map(([sz, pr], i) => (
-                <button key={i} onClick={() => addVariant(variantModalItem, sz, pr)} className="w-full flex justify-between items-center p-4 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-2xl font-black text-purple-900 transition-colors">
-                  <span>{sz}</span>
-                  <span className="text-lg">₹{pr}</span>
-                </button>
-              ))}
-            </div>
-          </Modal>
-        )}
-
         {checkout && (
           <div className="absolute inset-0 bg-purple-950/80 backdrop-blur-sm z-30 flex items-end">
             <div className="bg-white w-full rounded-t-[2.5rem] p-6 pb-8 shadow-2xl max-h-[90%] overflow-y-auto">
               <div className="flex justify-between items-center mb-4"><h3 className="text-2xl font-black text-slate-900">Your Order</h3><button onClick={() => { playSfx('click'); setCheckout(false); }} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200"><X className="w-5 h-5" /></button></div>
               
-              {/* Coupons List */}
-              {coupons.length > 0 && (
-                <div className="mb-4">
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1"><Tag className="w-3.5 h-3.5"/> Available Offers</p>
-                  <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                    {coupons.map(cp => (
-                      <button key={cp.id} onClick={() => { playSfx('click'); setSelectedCoupon(selectedCoupon?.id === cp.id ? null : cp); }} className={`px-4 py-2 rounded-xl text-xs font-bold shrink-0 border transition-all ${selectedCoupon?.id === cp.id ? 'bg-purple-700 text-white border-purple-700 shadow-md' : 'bg-purple-50 text-purple-700 border-purple-200'}`}>
-                        {cp.code} ({cp.discount}% OFF)
+              <div className="bg-purple-50 p-4 rounded-3xl mb-5 border border-purple-100 shadow-inner">
+                <div className="flex justify-between items-center mb-2"><span className="text-xs font-bold text-purple-600 uppercase">Subtotal</span><span className="font-bold text-slate-700">₹{rawTotal}</span></div>
+                {selectedCoupon && <div className="flex justify-between items-center mb-2 text-emerald-600 text-sm font-bold"><span>Discount ({selectedCoupon.code} - {selectedCoupon.discount}%)</span><span>-₹{discountAmount}</span></div>}
+                <div className="flex justify-between items-center pt-2 border-t border-purple-200"><span className="text-xs font-bold text-purple-600 uppercase">Final Total</span><span className="text-3xl font-black text-purple-900">₹{total}</span></div>
+                
+                <div className="space-y-3 max-h-36 overflow-y-auto pr-2 mt-4 pt-3 border-t border-purple-200">{cart.map(c => <div key={c.key} className="flex items-center justify-between text-xs text-slate-700 font-bold border-b border-purple-100/50 pb-1.5"><span className="flex-1">{c.name}</span><div className="flex items-center gap-1.5 mx-2"><button onClick={() => chg(c.key, -1)} className="px-1.5 bg-white rounded shadow-sm">-</button><span>{c.qty}</span><button onClick={() => chg(c.key, 1)} className="px-1.5 bg-white rounded shadow-sm">+</button></div><span className="w-10 text-right">₹{c.price * c.qty}</span></div>)}</div>
+              </div>
+
+              {/* Coupons Section */}
+              <div className="mb-5">
+                <p className="font-bold text-slate-500 text-xs mb-2 uppercase tracking-widest flex items-center gap-1"><Tag className="w-3.5 h-3.5"/> Available Coupons / Offers</p>
+                {coupons.length > 0 ? (
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {coupons.map(c => (
+                      <button key={c.id} onClick={() => applyCoupon(c)} className={`px-3 py-2 rounded-xl text-xs font-bold border flex items-center gap-2 ${selectedCoupon?.id === c.id ? 'bg-purple-700 text-white border-purple-700' : 'bg-purple-50 text-purple-700 border-purple-200'}`}>
+                        <span>{c.code} ({c.discount}% OFF)</span>
                       </button>
                     ))}
                   </div>
-                </div>
-              )}
+                ) : <p className="text-xs text-slate-400 italic mb-2">No special coupons active right now.</p>}
 
-              <div className="bg-purple-50 p-5 rounded-3xl mb-6 border border-purple-100 shadow-inner">
-                <div className="flex justify-between text-xs font-bold text-purple-600 uppercase mb-1"><span>Subtotal</span><span>₹{rawTotal}</span></div>
-                {selectedCoupon && <div className="flex justify-between text-xs font-bold text-emerald-600 uppercase mb-2"><span>Discount ({selectedCoupon.code})</span><span>-₹{discountAmt}</span></div>}
-                <p className="text-xs font-bold text-purple-600 uppercase mb-1 tracking-widest">Final Bill</p><div className="text-4xl font-black text-purple-900 mb-4">₹{total}</div>
-                <div className="space-y-3 max-h-40 overflow-y-auto pr-2">{cart.map(c => <div key={c.key} className="flex items-center justify-between text-sm text-slate-700 font-bold border-b border-purple-100/50 pb-2"><span className="flex-1">{c.name}</span><div className="flex items-center gap-2 mx-2"><button onClick={() => chg(c.key, -1)} className="px-2 py-1 bg-white rounded-lg shadow-sm">-</button><span>{c.qty}</span><button onClick={() => chg(c.key, 1)} className="px-2 py-1 bg-white rounded-lg shadow-sm">+</button></div><span className="w-12 text-right">₹{c.price * c.qty}</span></div>)}</div>
+                <div className="flex gap-2">
+                  <input type="text" placeholder="Enter coupon code" value={couponCodeInput} onChange={e => setCouponCodeInput(e.target.value)} className="flex-1 border-2 border-slate-200 rounded-xl px-3 py-2 text-xs font-bold uppercase outline-none focus:border-purple-600" />
+                  <button onClick={verifyCouponCode} className="bg-slate-800 text-white px-4 py-2 rounded-xl text-xs font-bold">Apply</button>
+                </div>
+                {couponError && <p className="text-red-500 text-xs font-bold mt-1">{couponError}</p>}
               </div>
+
               <p className="font-bold text-slate-400 text-xs mb-3 uppercase tracking-widest">Select Payment</p>
               <div className="space-y-3">
-                <button onClick={() => { playSfx('click'); onPlaceOrder(tableNumber, cart, total, 'Online', customerName, customerPhone, discountAmt); setCart([]); setCheckout(false); }} className="w-full flex items-center p-4 border-2 border-purple-200 rounded-2xl bg-white hover:bg-purple-50 transition-colors"><div className="bg-purple-100 p-3 rounded-xl text-purple-700 mr-4"><CreditCard className="w-6 h-6" /></div><div><h4 className="font-bold text-slate-800 text-lg">Pay via UPI / GPay</h4><p className="text-xs text-slate-500 font-medium">Fast & secure online payment</p></div></button>
-                <button onClick={() => { playSfx('click'); onPlaceOrder(tableNumber, cart, total, 'Cash', customerName, customerPhone, discountAmt); setCart([]); setCheckout(false); }} className="w-full flex items-center p-4 border-2 border-slate-200 rounded-2xl bg-white hover:bg-slate-50 transition-colors"><div className="bg-slate-100 p-3 rounded-xl text-slate-600 mr-4"><Banknote className="w-6 h-6" /></div><div><h4 className="font-bold text-slate-800 text-lg">Cash on Delivery</h4><p className="text-xs text-slate-500 font-medium">Pay directly to the waiter</p></div></button>
+                <button onClick={() => { playSfx('click'); onPlaceOrder(tableNumber, cart, total, 'Online', customerName, customerPhone, discountAmount); setCart([]); setCheckout(false); }} className="w-full flex items-center p-4 border-2 border-purple-200 rounded-2xl bg-white hover:bg-purple-50 transition-colors"><div className="bg-purple-100 p-3 rounded-xl text-purple-700 mr-4"><CreditCard className="w-6 h-6" /></div><div><h4 className="font-bold text-slate-800 text-lg">Pay via UPI / GPay</h4><p className="text-xs text-slate-500 font-medium">Fast & secure online payment</p></div></button>
+                <button onClick={() => { playSfx('click'); onPlaceOrder(tableNumber, cart, total, 'Cash', customerName, customerPhone, discountAmount); setCart([]); setCheckout(false); }} className="w-full flex items-center p-4 border-2 border-slate-200 rounded-2xl bg-white hover:bg-slate-50 transition-colors"><div className="bg-slate-100 p-3 rounded-xl text-slate-600 mr-4"><Banknote className="w-6 h-6" /></div><div><h4 className="font-bold text-slate-800 text-lg">Cash on Delivery</h4><p className="text-xs text-slate-500 font-medium">Pay directly to the waiter</p></div></button>
               </div>
             </div>
           </div>
@@ -623,8 +604,8 @@ function AdminDashboard(p) {
         <nav className="flex-1 py-6 space-y-2 px-3 overflow-y-auto">
           <SideBtn icon={<Bell />} label="Live Orders" active={tab === 'orders'} onClick={() => { playSfx('click'); setTab('orders'); }} badge={p.activeOrders.filter(o => o.status === 'Verifying' || o.status === 'Pending').length} />
           <SideBtn icon={<Utensils />} label="Menu Manager" active={tab === 'menu'} onClick={() => { playSfx('click'); setTab('menu'); }} />
-          <SideBtn icon={<Package />} label="Inventory & Profit" active={tab === 'inventory'} onClick={() => { playSfx('click'); setTab('inventory'); }} />
-          <SideBtn icon={<Tag />} label="Coupons & Offers" active={tab === 'coupons'} onClick={() => { playSfx('click'); setTab('coupons'); }} />
+          <SideBtn icon={<Package />} label="Inventory" active={tab === 'inventory'} onClick={() => { playSfx('click'); setTab('inventory'); }} />
+          <SideBtn icon={<Tag />} label="Coupons" active={tab === 'coupons'} onClick={() => { playSfx('click'); setTab('coupons'); }} />
           <SideBtn icon={<QrCode />} label="Table & QR" active={tab === 'qr'} onClick={() => { playSfx('click'); setTab('qr'); }} />
           <SideBtn icon={<History />} label="Revenue & P/L" active={tab === 'history'} onClick={() => { playSfx('click'); setTab('history'); }} />
           <SideBtn icon={<Settings />} label="Settings" active={tab === 'settings'} onClick={() => { playSfx('click'); setTab('settings'); }} />
@@ -634,7 +615,7 @@ function AdminDashboard(p) {
 
       <main className="flex-1 flex flex-col h-screen overflow-hidden">
         <header className="bg-white px-5 md:px-8 py-4 flex justify-between items-center shadow-sm border-b border-slate-200 gap-4 shrink-0">
-          <h1 className="text-lg md:text-2xl font-black text-purple-950 capitalize truncate">{tab.replace('qr', 'Table & QR').replace('history', 'Revenue & Profit/Loss').replace('coupons', 'Coupons & Offers')}</h1>
+          <h1 className="text-lg md:text-2xl font-black text-purple-950 capitalize truncate">{tab.replace('qr', 'Table & QR').replace('history', 'Revenue & Profit/Loss')}</h1>
           <div className="flex items-center gap-3 shrink-0">
             <button onClick={toggleSound} className={`p-2.5 rounded-xl transition-colors ${soundEnabled ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-400'}`}>{soundEnabled ? <Volume2 className="w-5 h-5"/> : <VolumeX className="w-5 h-5"/>}</button>
             <button onClick={toggleVoice} className={`p-2.5 rounded-xl transition-colors ${voiceEnabled ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-400'}`}><Mic className="w-5 h-5"/></button>
@@ -644,10 +625,10 @@ function AdminDashboard(p) {
         <div className="flex-1 overflow-y-auto p-4 md:p-6">
           {tab === 'orders' && <OrdersBoard orders={p.activeOrders} updateStatus={updateStatus} cancelOrder={p.cancelOrder} />}
           {tab === 'menu' && <MenuTab menuItems={p.menuItems} db={p.db} />}
-          {tab === 'inventory' && <InventoryProfitTab menuItems={p.menuItems} stockInv={p.stockInv} iceInv={p.iceInv} db={p.db} />}
+          {tab === 'inventory' && <InventoryTab stockInv={p.stockInv} iceInv={p.iceInv} db={p.db} />}
           {tab === 'coupons' && <CouponsTab coupons={p.coupons} db={p.db} />}
           {tab === 'qr' && <QRTab logo={p.cafeLogo} />}
-          {tab === 'history' && <HistoryTab history={p.orderHistory} stockInv={p.stockInv} iceInv={p.iceInv} db={p.db} />}
+          {tab === 'history' && <HistoryTab history={p.orderHistory} stockInv={p.stockInv} iceInv={p.iceInv} menuItems={p.menuItems} db={p.db} />}
           {tab === 'settings' && <SettingsTab logo={p.cafeLogo} db={p.db} />}
         </div>
       </main>
@@ -664,7 +645,7 @@ function SideBtn({ icon, label, active, onClick, badge }) {
   );
 }
 
-/* ---------------- 4-COLUMN ORDERS BOARD WITH WHATSAPP BILL SEND ---------------- */
+/* ---------------- 4-COLUMN ORDERS BOARD ---------------- */
 function OrdersBoard({ orders, updateStatus, cancelOrder }) {
   const col = (s) => orders.filter(o => o.status === s);
   return (
@@ -672,7 +653,7 @@ function OrdersBoard({ orders, updateStatus, cancelOrder }) {
       <AdminCol title="Verify Payment" icon={<CreditCard />} list={col('Verifying')} bg="bg-indigo-50" text="text-indigo-900" action="Payment Received & Accept" color="bg-indigo-600" onAction={(id) => updateStatus(id, 'Pending')} onCancel={cancelOrder} />
       <AdminCol title="New Orders" icon={<Bell />} list={col('Pending')} bg="bg-purple-50" text="text-purple-900" action="Accept & Prep" color="bg-purple-600" onAction={(id) => updateStatus(id, 'Preparing')} onCancel={cancelOrder} blink />
       <AdminCol title="In Kitchen" icon={<ChefHat />} list={col('Preparing')} bg="bg-amber-50" text="text-amber-900" action="Mark as Ready" color="bg-amber-500" onAction={(id) => updateStatus(id, 'Ready')} onCancel={cancelOrder} />
-      <AdminCol title="Ready to Serve" icon={<CheckCircle />} list={col('Ready')} bg="bg-green-50" text="text-green-900" action="Complete & Send WhatsApp Bill" color="bg-green-600" onAction={(id) => updateStatus(id, 'Completed')} onCancel={cancelOrder} />
+      <AdminCol title="Ready to Serve" icon={<CheckCircle />} list={col('Ready')} bg="bg-green-50" text="text-green-900" action="Complete & Send Bill" color="bg-green-600" onAction={(id) => updateStatus(id, 'Completed')} onCancel={cancelOrder} />
     </div>
   );
 }
@@ -684,7 +665,10 @@ function AdminCol({ title, icon, list, bg, text, action, color, onAction, onCanc
         {list.length === 0 && <div className="text-slate-400 text-center py-10 text-sm font-bold border-2 border-dashed border-slate-200 rounded-2xl">Empty</div>}
         {list.map(o => (
           <div key={o.id} className={`bg-white p-5 rounded-2xl shadow-sm border-2 ${blink ? 'border-purple-400 shadow-[0_0_20px_rgba(168,85,247,0.2)]' : 'border-slate-100'}`}>
-            <div className="flex justify-between items-start mb-3 border-b border-slate-100 pb-3"><div><h4 className="text-xl font-black text-slate-900">Table {o.table}</h4><p className="text-xs font-bold text-purple-700">{o.customerName || 'Guest'} ({o.customerPhone || 'N/A'})</p><span className="text-xs text-slate-400 font-mono font-bold">#{o.id}</span></div><div className="text-xl font-black text-purple-700">₹{o.total}</div></div>
+            <div className="flex justify-between items-start mb-3 border-b border-slate-100 pb-3">
+              <div><h4 className="text-xl font-black text-slate-900">Table {o.table}</h4><p className="text-xs font-bold text-purple-700">{o.customerName || 'Guest'} ({o.customerPhone || 'N/A'})</p><span className="text-xs text-slate-400 font-mono font-bold">#{o.id}</span></div>
+              <div className="text-xl font-black text-purple-700">₹{o.total}</div>
+            </div>
             <div className="mb-4 space-y-1.5">{o.items.map((it, i) => <div key={i} className="flex gap-2 text-sm text-slate-700 font-bold"><span className="bg-purple-100 text-purple-800 text-xs px-1.5 py-0.5 rounded-md">{it.qty}x</span><span>{it.name}</span></div>)}
               <div className="pt-3 mt-2 border-t border-dashed border-slate-200 flex justify-between items-center text-xs font-black uppercase"><span className="text-slate-500">Method:</span><span className={`px-2 py-1 rounded-md ${o.payment === 'Online' ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700'}`}>{o.payment}</span></div>
             </div>
@@ -696,7 +680,47 @@ function AdminCol({ title, icon, list, bg, text, action, color, onAction, onCanc
   );
 }
 
-/* ---------------- MENU TAB WITH INGREDIENTS/PROFIT ---------------- */
+/* ---------------- COUPONS MANAGEMENT TAB ---------------- */
+function CouponsTab({ coupons, db }) {
+  const [code, setCode] = useState('');
+  const [discount, setDiscount] = useState(10);
+
+  const addCoupon = async (e) => {
+    e.preventDefault();
+    if (!code.trim()) return playSfx('error');
+    playSfx('save');
+    await setDoc(doc(db, 'coupons', 'c_' + Date.now()), { code: code.trim().toUpperCase(), discount: Number(discount) });
+    setCode('');
+    setDiscount(10);
+  };
+
+  const deleteCoupon = async (id) => {
+    playSfx('del');
+    await deleteDoc(doc(db, 'coupons', id));
+  };
+
+  return (
+    <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 max-w-xl">
+      <h2 className="text-xl font-black text-slate-900 mb-4">Manage Discount Coupons</h2>
+      <form onSubmit={addCoupon} className="space-y-4 mb-6 bg-slate-50 p-4 rounded-2xl border">
+        <div><label className="text-xs font-bold text-slate-500 uppercase">Coupon Code</label><input type="text" value={code} onChange={e => setCode(e.target.value)} placeholder="e.g. SPECIAL10" className={inpStyle} required /></div>
+        <div><label className="text-xs font-bold text-slate-500 uppercase">Discount Percentage (%)</label><input type="number" value={discount} onChange={e => setDiscount(e.target.value)} className={inpStyle} required min={1} max={100} /></div>
+        <button type="submit" className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-3 rounded-xl">Add Coupon</button>
+      </form>
+      <div className="space-y-2">
+        {coupons.map(c => (
+          <div key={c.id} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl border">
+            <div><p className="font-black text-purple-900">{c.code}</p><p className="text-xs font-bold text-slate-500">{c.discount}% OFF on total bill</p></div>
+            <DelBtn onDel={() => deleteCoupon(c.id)} />
+          </div>
+        ))}
+        {coupons.length === 0 && <p className="text-center text-slate-400 font-bold text-sm">No active coupons.</p>}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- MENU CRUD TAB WITH VARIANTS & INGREDIENTS ---------------- */
 function MenuTab({ menuItems, db }) {
   const [edit, setEdit] = useState(undefined);
   const [search, setSearch] = useState('');
@@ -708,21 +732,19 @@ function MenuTab({ menuItems, db }) {
   const save = async (item) => {
     playSfx('save');
     if (edit && edit.id) {
-      await updateDoc(doc(db, 'eternal_menu_v3', edit.id), item);
+      await updateDoc(doc(db, 'eternal_menu_v2', edit.id), item);
     } else {
-      await setDoc(doc(db, 'eternal_menu_v3', 'm' + Date.now()), item);
+      await setDoc(doc(db, 'eternal_menu_v2', 'm' + Date.now()), item);
     }
     setEdit(undefined);
   };
-
   const toggleStock = async (it) => {
     playSfx('click');
-    await updateDoc(doc(db, 'eternal_menu_v3', it.id), { stock: !it.stock });
+    await updateDoc(doc(db, 'eternal_menu_v2', it.id), { stock: !it.stock });
   };
-
   const deleteItem = async (id) => {
     playSfx('del');
-    await deleteDoc(doc(db, 'eternal_menu_v3', id));
+    await deleteDoc(doc(db, 'eternal_menu_v2', id));
   };
 
   const categories = [...new Set(menuItems.map(i => i.category).filter(Boolean))];
@@ -740,17 +762,23 @@ function MenuTab({ menuItems, db }) {
           <button onClick={() => { playSfx('click'); setEdit({ name: '', category: 'Pizza', price: 100, desc: '', v: null, ingredients: [], stock: true }); }} className="bg-purple-700 hover:bg-purple-800 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-1.5 text-sm shrink-0"><Plus className="w-4 h-4" /> Add Menu</button>
         </div>
       </div>
-      <div className="overflow-x-auto"><table className="w-full text-left min-w-[600px]">
-        <thead><tr className="bg-slate-100 text-slate-500 text-xs uppercase border-b"><th className="p-3 pl-6">Img</th><th className="p-3">Name / Category</th><th className="p-3">Price</th><th className="p-3">Status</th><th className="p-3 pr-6 text-right">Actions</th></tr></thead>
-        <tbody className="divide-y divide-slate-100">{filteredMenu.map(it => (
-          <tr key={it.id} className="hover:bg-slate-50">
-            <td className="p-3 pl-6"><div className="w-10 h-10 bg-slate-200 rounded-xl overflow-hidden flex items-center justify-center">{it.img ? <img src={it.img} alt="" className="w-full h-full object-cover" /> : <ImageIcon className="w-4 h-4 text-slate-400" />}</div></td>
-            <td className="p-3"><p className="font-bold text-slate-900 text-sm">{it.name}</p><p className="text-[11px] text-slate-500">{it.category}</p></td>
-            <td className="p-3 font-black text-purple-700 text-sm">₹{it.v ? it.v.map(x => x[1]).join(' / ') : it.price}</td>
-            <td className="p-3"><button onClick={() => toggleStock(it)} className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border ${it.stock ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{it.stock ? <ToggleRight className="w-3.5 h-3.5" /> : <ToggleLeft className="w-3.5 h-3.5" />}{it.stock ? 'In Stock' : 'Out'}</button></td>
-            <td className="p-3 pr-6 text-right"><div className="flex justify-end gap-1.5"><button onClick={() => { playSfx('click'); setEdit(it); }} className="p-2 text-slate-400 hover:text-purple-700 bg-slate-50 rounded-xl"><Edit className="w-4 h-4" /></button><DelBtn onDel={() => deleteItem(it.id)} /></div></td>
-          </tr>
-        ))}</tbody>
+      <div className="overflow-x-auto"><table className="w-full text-left min-w-[700px]">
+        <thead><tr className="bg-slate-100 text-slate-500 text-xs uppercase border-b"><th className="p-3 pl-6">Img</th><th className="p-3">Name / Category</th><th className="p-3">Price</th><th className="p-3">Hidden Cost (Profit Calc)</th><th className="p-3">Status</th><th className="p-3 pr-6 text-right">Actions</th></tr></thead>
+        <tbody className="divide-y divide-slate-100">{filteredMenu.map(it => {
+          const totalIngCost = (it.ingredients || []).reduce((s, ing) => s + Number(ing.cost || 0), 0);
+          const basePrice = it.v ? it.v[0][1] : it.price;
+          const profit = basePrice - totalIngCost;
+          return (
+            <tr key={it.id} className="hover:bg-slate-50">
+              <td className="p-3 pl-6"><div className="w-10 h-10 bg-slate-200 rounded-xl overflow-hidden flex items-center justify-center">{it.img ? <img src={it.img} alt="" className="w-full h-full object-cover" /> : <ImageIcon className="w-4 h-4 text-slate-400" />}</div></td>
+              <td className="p-3"><p className="font-bold text-slate-900 text-sm">{it.name}</p><p className="text-[11px] text-slate-500">{it.category}</p></td>
+              <td className="p-3 font-black text-purple-700 text-sm">₹{it.v ? it.v.map(x => x[1]).join(' / ') : it.price}</td>
+              <td className="p-3 text-xs font-bold text-slate-600">Cost: ₹{totalIngCost} | <span className={profit >= 0 ? 'text-green-600' : 'text-red-600'}>Profit: ₹{profit}</span></td>
+              <td className="p-3"><button onClick={() => toggleStock(it)} className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border ${it.stock ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{it.stock ? <ToggleRight className="w-3.5 h-3.5" /> : <ToggleLeft className="w-3.5 h-3.5" />}{it.stock ? 'In Stock' : 'Out'}</button></td>
+              <td className="p-3 pr-6 text-right"><div className="flex justify-end gap-1.5"><button onClick={() => { playSfx('click'); setEdit(it); }} className="p-2 text-slate-400 hover:text-purple-700 bg-slate-50 rounded-xl"><Edit className="w-4 h-4" /></button><DelBtn onDel={() => deleteItem(it.id)} /></div></td>
+            </tr>
+          );
+        })}</tbody>
       </table></div>
       {edit !== undefined && <MenuForm item={edit} categories={categories} descriptions={descriptions} onSave={save} onClose={() => setEdit(undefined)} />}
     </div>
@@ -762,96 +790,104 @@ function MenuForm({ item, categories, descriptions, onSave, onClose }) {
   const [category, setCategory] = useState(item?.category || 'Pizza');
   const [price, setPrice] = useState(item?.price || 100);
   const [desc, setDesc] = useState(item?.desc || '');
-  const [variants, setVariants] = useState(item?.v ? item.v.map(x => x.join(':')).join(', ') : '');
-  const [ingredients, setIngredients] = useState(item?.ingredients || []);
-  const [newIngName, setNewIngName] = useState('');
-  const [newIngCost, setNewIngCost] = useState('');
+  const [hasVariants, setHasVariants] = useState(!!item?.v);
+  const [variants, setVariants] = useState(item?.v ? item.v.map(x => `${x[0]}:${x[1]}`).join(', ') : 'Small:100, Medium:150, Large:200');
+  const [ingredients, setIngredients] = useState(item?.ingredients || [{ name: '', cost: '' }]);
   const [img, setImg] = useState(item?.img || '');
   const fileRef = useRef(null);
 
-  const addIngredient = () => {
-    if (!newIngName.trim() || !newIngCost) return;
-    setIngredients([...ingredients, { name: newIngName.trim(), cost: Number(newIngCost) }]);
-    setNewIngName('');
-    setNewIngCost('');
+  const addIngredient = () => setIngredients([...ingredients, { name: '', cost: '' }]);
+  const updateIngredient = (index, field, value) => {
+    const updated = [...ingredients];
+    updated[index][field] = value;
+    setIngredients(updated);
   };
-
-  const removeIngredient = (idx) => {
-    setIngredients(ingredients.filter((_, i) => i !== idx));
-  };
+  const removeIngredient = (index) => setIngredients(ingredients.filter((_, i) => i !== index));
 
   const submit = (e) => {
     e.preventDefault();
     if (!name.trim() || !category.trim()) return playSfx('error');
-    const vs = variants.split(',').map(s => s.trim()).filter(Boolean).map(s => { const [l, p] = s.split(':'); return [l.trim(), Number(p)]; }).filter(x => x[0] && x[1]);
+    
+    let parsedVariants = null;
+    if (hasVariants) {
+      parsedVariants = variants.split(',').map(s => s.trim()).filter(Boolean).map(s => {
+        const [l, p] = s.split(':');
+        return [l.trim(), Number(p)];
+      }).filter(x => x[0] && !isNaN(x[1]));
+    }
+
+    const cleanIngredients = ingredients.filter(i => i.name.trim() && !isNaN(i.cost)).map(i => ({ name: i.name.trim(), cost: Number(i.cost) }));
+
     onSave({
       name: name.trim(),
       category: category.trim(),
       desc: desc.trim(),
       img,
-      price: vs.length ? vs[0][1] : Number(price),
-      v: vs.length > 1 ? vs : null,
-      ingredients,
+      price: parsedVariants && parsedVariants.length ? parsedVariants[0][1] : Number(price),
+      v: parsedVariants && parsedVariants.length > 0 ? parsedVariants : null,
+      ingredients: cleanIngredients,
       stock: item ? item.stock : true
     });
   };
 
-  const totalCost = ingredients.reduce((s, i) => s + i.cost, 0);
-
   return (
     <Modal title={item?.id ? 'Edit Menu Item' : 'New Menu Item'} onClose={onClose}>
-      <form onSubmit={submit} className="space-y-3">
-        <div><label className="text-xs font-bold text-slate-500 uppercase">Item name</label><input value={name} onChange={e => setName(e.target.value)} className={inpStyle} required /></div>
+      <form onSubmit={submit} className="space-y-4 max-h-[75vh] overflow-y-auto pr-2">
+        <div><label className="text-xs font-bold text-slate-500 uppercase">Item Name</label><input value={name} onChange={e => setName(e.target.value)} className={inpStyle} required /></div>
+        
         <div className="grid grid-cols-2 gap-3">
-          <div><label className="text-xs font-bold text-slate-500 uppercase">Default Price (₹)</label><input type="number" value={price} onChange={e => setPrice(e.target.value)} className={inpStyle} required /></div>
+          {!hasVariants && <div><label className="text-xs font-bold text-slate-500 uppercase">Price (₹)</label><input type="number" value={price} onChange={e => setPrice(e.target.value)} className={inpStyle} required /></div>}
           <div>
             <label className="text-xs font-bold text-slate-500 uppercase">Category</label>
             <input list="cat-list" value={category} onChange={e => setCategory(e.target.value)} className={inpStyle} required />
             <datalist id="cat-list">{categories.map(c => <option key={c} value={c} />)}</datalist>
           </div>
         </div>
+
+        <div className="flex items-center gap-2 bg-purple-50 p-3 rounded-xl border border-purple-100">
+          <input type="checkbox" id="hasVar" checked={hasVariants} onChange={e => setHasVariants(e.target.checked)} className="w-4 h-4 accent-purple-600" />
+          <label htmlFor="hasVar" className="text-xs font-bold text-purple-900 cursor-pointer">Has Size Variants (Small, Medium, Large, Half, Full)?</label>
+        </div>
+
+        {hasVariants && (
+          <div>
+            <label className="text-xs font-bold text-slate-500 uppercase">Variants Format (Size:Price)</label>
+            <input value={variants} onChange={e => setVariants(e.target.value)} placeholder="Small:100, Medium:150, Large:200" className={inpStyle + ' text-xs'} />
+          </div>
+        )}
+
         <div>
           <label className="text-xs font-bold text-slate-500 uppercase">Description (Optional)</label>
           <input list="desc-list" value={desc} onChange={e => setDesc(e.target.value)} className={inpStyle} />
           <datalist id="desc-list">{descriptions.map(d => <option key={d} value={d} />)}</datalist>
         </div>
-        <div><label className="text-xs font-bold text-slate-500 uppercase">Sizes / Variants e.g. Small:139, Medium:169, Large:189</label><input value={variants} onChange={e => setVariants(e.target.value)} className={inpStyle + ' text-sm'} /></div>
 
-        {/* Hidden Ingredient Cost Calculation for Admin */}
-        <div className="bg-purple-50 p-4 rounded-2xl border border-purple-100">
-          <label className="text-xs font-black text-purple-900 uppercase block mb-2">Hidden Ingredients Cost (Admin Only)</label>
-          <div className="flex gap-2 mb-2">
-            <input type="text" placeholder="Ingredient Name" value={newIngName} onChange={e => setNewIngName(e.target.value)} className="w-1/2 border rounded-xl px-3 py-1.5 text-xs font-bold" />
-            <input type="number" placeholder="Cost (₹)" value={newIngCost} onChange={e => setNewIngCost(e.target.value)} className="w-1/3 border rounded-xl px-3 py-1.5 text-xs font-bold" />
-            <button type="button" onClick={addIngredient} className="bg-purple-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold">+</button>
-          </div>
-          <div className="space-y-1 max-h-24 overflow-y-auto">
-            {ingredients.map((ig, idx) => (
-              <div key={idx} className="flex justify-between items-center text-xs font-bold bg-white px-3 py-1 rounded-lg">
-                <span>{ig.name} (₹{ig.cost})</span>
-                <button type="button" onClick={() => removeIngredient(idx)} className="text-red-500">×</button>
-              </div>
-            ))}
-          </div>
-          <div className="mt-2 text-xs font-black text-purple-950 flex justify-between border-t border-purple-200 pt-2">
-            <span>Total Cost: ₹{totalCost}</span>
-            <span>Est. Profit: ₹{(Number(price) - totalCost)}</span>
-          </div>
+        {/* Hidden Ingredients for Profit Calculation */}
+        <div className="border-t pt-3">
+          <div className="flex justify-between items-center mb-2"><label className="text-xs font-black text-purple-900 uppercase">Hidden Ingredients / Cost (Admin Only)</label><button type="button" onClick={addIngredient} className="text-xs bg-purple-100 text-purple-800 px-2.5 py-1 rounded-lg font-bold">+ Add</button></div>
+          {ingredients.map((ing, idx) => (
+            <div key={idx} className="flex gap-2 mb-2">
+              <input type="text" placeholder="Ingredient Name" value={ing.name} onChange={e => updateIngredient(idx, 'name', e.target.value)} className="flex-1 border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-bold outline-none" />
+              <input type="number" placeholder="Cost (₹)" value={ing.cost} onChange={e => updateIngredient(idx, 'cost', e.target.value)} className="w-24 border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-bold outline-none" />
+              {ingredients.length > 1 && <button type="button" onClick={() => removeIngredient(idx)} className="text-red-500 p-1"><X className="w-4 h-4"/></button>}
+            </div>
+          ))}
         </div>
 
         <div>
           <label className="text-xs font-bold text-slate-500 uppercase">Photo (Optional)</label>
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={async (e) => { if (e.target.files[0]) { playSfx('save'); setImg(await readImg(e.target.files[0])); } }} />
-          <div className="flex gap-3 items-center mt-1"><div className="w-16 h-16 bg-slate-100 rounded-xl overflow-hidden flex justify-center items-center">{img ? <img src={img} className="w-full h-full object-cover" /> : <ImageIcon className="w-6 h-6 text-slate-300" />}</div><button type="button" onClick={() => { playSfx('click'); fileRef.current.click(); }} className="bg-purple-100 text-purple-800 font-bold px-4 py-2 rounded-xl flex items-center gap-2"><Upload className="w-4 h-4"/> Upload Image</button></div>
+          <div className="flex gap-3 items-center mt-1"><div className="w-14 h-14 bg-slate-100 rounded-xl overflow-hidden flex justify-center items-center">{img ? <img src={img} className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-slate-300" />}</div><button type="button" onClick={() => { playSfx('click'); fileRef.current.click(); }} className="bg-purple-100 text-purple-800 font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-1.5"><Upload className="w-3.5 h-3.5"/> Upload</button></div>
         </div>
-        <button type="submit" className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-4 rounded-xl mt-4">Save Item</button>
+
+        <button type="submit" className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-3.5 rounded-xl mt-4">Save Menu Item</button>
       </form>
     </Modal>
   );
 }
 
-/* ---------------- INVENTORY TAB WITH PROFIT INSIGHTS ---------------- */
-function InventoryProfitTab({ menuItems, stockInv, iceInv, db }) {
+/* ---------------- INVENTORY TAB ---------------- */
+function InventoryTab({ stockInv, iceInv, db }) {
   const [search, setSearch] = useState('');
   const stockLows = stockInv.filter(i => i.qty <= i.min);
   const iceLows = iceInv.filter(i => i.qty <= i.min);
@@ -861,23 +897,6 @@ function InventoryProfitTab({ menuItems, stockInv, iceInv, db }) {
       {stockLows.length > 0 && <div className="bg-red-50 border border-red-200 text-red-800 rounded-2xl p-4 font-bold text-sm flex gap-2"><AlertTriangle className="w-5 h-5 shrink-0"/>{stockLows.map(l => `${l.name} is low`).join('. ')}</div>}
       {iceLows.length > 0 && <div className="bg-orange-50 border border-orange-200 text-orange-800 rounded-2xl p-4 font-bold text-sm flex gap-2"><AlertTriangle className="w-5 h-5 shrink-0"/>Ice Cream Low: {iceLows.map(l => l.name).join(', ')}</div>}
       
-      {/* Product Profitability Overview */}
-      <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200">
-        <h3 className="text-lg font-black text-slate-900 mb-3">Product Profitability Insights (Investment vs Profit)</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 max-h-48 overflow-y-auto pr-2">
-          {menuItems.map(m => {
-            const cost = (m.ingredients || []).reduce((s, i) => s + i.cost, 0);
-            const profit = m.price - cost;
-            return (
-              <div key={m.id} className="bg-purple-50 p-3 rounded-2xl border border-purple-100 flex justify-between items-center">
-                <div><h4 className="font-black text-slate-800 text-sm">{m.name}</h4><p className="text-xs text-slate-500 font-bold">Price: ₹{m.price} | Cost: ₹{cost}</p></div>
-                <span className={`text-xs font-black px-2.5 py-1 rounded-xl ${profit >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>Profit: ₹{profit}</span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
       <div className="bg-white rounded-3xl border border-slate-200 p-4 flex items-center gap-3">
         <Search className="w-5 h-5 text-slate-400 ml-2 shrink-0" />
         <input type="text" placeholder="Search inventory..." value={search} onChange={e => setSearch(e.target.value)} className="w-full font-bold outline-none text-slate-800 text-sm" />
@@ -922,6 +941,7 @@ function InvSection({ title, icon, items, colName, db, prefix, search }) {
   };
 
   const deleteInv = async (id) => { playSfx('del'); await deleteDoc(doc(db, colName, id)); };
+
   const names = [...new Set(items.map(i => i.name).filter(Boolean))];
   
   return (
@@ -961,48 +981,6 @@ function InvSection({ title, icon, items, colName, db, prefix, search }) {
           </form>
         </Modal>
       )}
-    </div>
-  );
-}
-
-/* ---------------- COUPONS MANAGEMENT TAB ---------------- */
-function CouponsTab({ coupons, db }) {
-  const [code, setCode] = useState('');
-  const [discount, setDiscount] = useState('');
-
-  const addCoupon = async (e) => {
-    e.preventDefault();
-    if (!code.trim() || !discount) return playSfx('error');
-    playSfx('save');
-    await setDoc(doc(db, 'coupons', 'c_' + Date.now()), { code: code.trim().toUpperCase(), discount: Number(discount) });
-    setCode('');
-    setDiscount('');
-  };
-
-  const deleteCoupon = async (id) => {
-    playSfx('del');
-    await deleteDoc(doc(db, 'coupons', id));
-  };
-
-  return (
-    <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 max-w-xl">
-      <h2 className="text-2xl font-black text-slate-900 mb-6">Manage Offers & Coupons</h2>
-      <form onSubmit={addCoupon} className="space-y-4 mb-8">
-        <div><label className="text-xs font-bold text-slate-500 uppercase">Coupon Code</label><input type="text" placeholder="e.g. SPECIAL10" value={code} onChange={e => setCode(e.target.value)} className={inpStyle} required /></div>
-        <div><label className="text-xs font-bold text-slate-500 uppercase">Discount Percentage (%)</label><input type="number" placeholder="e.g. 10" value={discount} onChange={e => setDiscount(e.target.value)} className={inpStyle} required /></div>
-        <button type="submit" className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-4 rounded-xl">Add Coupon Offer</button>
-      </form>
-
-      <h3 className="font-black text-lg text-slate-800 mb-3">Active Coupons</h3>
-      <div className="space-y-2">
-        {coupons.map(cp => (
-          <div key={cp.id} className="flex justify-between items-center bg-purple-50 p-4 rounded-2xl border border-purple-100">
-            <div><span className="font-black text-purple-900 text-base">{cp.code}</span><span className="ml-3 text-xs font-bold bg-purple-200 text-purple-800 px-2.5 py-1 rounded-full">{cp.discount}% OFF</span></div>
-            <DelBtn onDel={() => deleteCoupon(cp.id)} />
-          </div>
-        ))}
-        {coupons.length === 0 && <p className="text-slate-400 font-bold text-sm">No active coupons.</p>}
-      </div>
     </div>
   );
 }
@@ -1068,8 +1046,8 @@ function QRTab({ logo }) {
   );
 }
 
-/* ---------------- REVENUE & EXCEL EXPORT WITH CUSTOMER DETAILS ---------------- */
-function HistoryTab({ history, stockInv, iceInv, db }) {
+/* ---------------- REVENUE & PROFIT/LOSS SECTION ---------------- */
+function HistoryTab({ history, stockInv, iceInv, menuItems, db }) {
   const [from, setFrom] = useState(''); const [to, setTo] = useState('');
   const rows = useMemo(() => history.filter(o => { const d = new Date(o.completedAt || o.time); const ymdStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); return (!from || ymdStr >= from) && (!to || ymdStr <= to); }), [history, from, to]);
   
@@ -1083,7 +1061,7 @@ function HistoryTab({ history, stockInv, iceInv, db }) {
 
   const dlCsv = () => {
     playSfx('save');
-    let c = 'Order ID,Table,Customer Name,Phone,Date,Time,Payment,Discount,Total,Items\n' + rows.map(o => { const d = new Date(o.completedAt || o.time); return `${o.id},${o.table},"${o.customerName || 'Guest'}","${o.customerPhone || 'N/A'}",${d.toLocaleDateString()},${d.toLocaleTimeString()},${o.payment},${o.discount || 0},${o.total},"${o.items.map(i => `${i.qty}x${i.name}`).join('; ')}"`; }).join('\n');
+    let c = 'ID,Table,Customer Name,Phone,Date,Time,Payment,Total,Items\n' + rows.map(o => { const d = new Date(o.completedAt || o.time); return `${o.id},${o.table},"${o.customerName || ''}",${o.customerPhone || ''},${d.toLocaleDateString()},${d.toLocaleTimeString()},${o.payment},${o.total},"${o.items.map(i => `${i.qty}x${i.name}`).join('; ')}"`; }).join('\n');
     c += `\n,,,,,,TOTAL REVENUE,${totalRevenue},\n,,,,,,TOTAL EXPENSE,${totalExpense},\n,,,,,,NET PROFIT/LOSS,${netProfitLoss},`;
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([c], { type: 'text/csv' })); a.download = `financial_report_${from || 'all'}_${to || 'all'}.csv`; a.click();
   };
@@ -1100,12 +1078,12 @@ function HistoryTab({ history, stockInv, iceInv, db }) {
         <div className="bg-purple-800 rounded-3xl p-5 text-white"><p className="text-purple-200 font-bold text-xs uppercase mb-1">Total Sales</p><h2 className="text-2xl font-black">₹{totalRevenue}</h2></div>
         <div className="bg-amber-600 rounded-3xl p-5 text-white"><p className="text-amber-100 font-bold text-xs uppercase mb-1">Total Expense</p><h2 className="text-2xl font-black">₹{totalExpense}</h2></div>
         <div className={`rounded-3xl p-5 text-white ${netProfitLoss >= 0 ? 'bg-green-600' : 'bg-red-600'}`}><p className="text-white/80 font-bold text-xs uppercase mb-1">Net Profit / Loss</p><h2 className="text-2xl font-black">₹{netProfitLoss}</h2></div>
-        <div className="bg-white rounded-3xl p-4 border border-slate-200 flex flex-col justify-center"><button onClick={dlCsv} disabled={!rows.length} className="bg-indigo-600 text-white font-black py-2.5 rounded-xl flex items-center justify-center gap-2 disabled:opacity-40 text-xs"><Download className="w-4 h-4"/> Export Excel / CSV</button></div>
+        <div className="bg-white rounded-3xl p-4 border border-slate-200 flex flex-col justify-center"><button onClick={dlCsv} disabled={!rows.length} className="bg-indigo-600 text-white font-black py-2.5 rounded-xl flex items-center justify-center gap-2 disabled:opacity-40 text-xs"><Download className="w-4 h-4"/> Export Report</button></div>
       </div>
 
       <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left min-w-[800px]">
+          <table className="w-full text-left min-w-[750px]">
             <thead className="bg-slate-50 text-slate-400 text-xs uppercase">
               <tr>
                 <th className="p-3 pl-6">Order</th>
@@ -1121,7 +1099,7 @@ function HistoryTab({ history, stockInv, iceInv, db }) {
               {rows.map(o => (
                 <tr key={o.id} className="hover:bg-slate-50">
                   <td className="p-3 pl-6 font-mono font-bold text-slate-600 text-sm">#{o.id}</td>
-                  <td className="p-3"><p className="font-bold text-sm">{o.customerName || 'Guest'}</p><p className="text-[11px] text-slate-400">{o.customerPhone || 'N/A'}</p></td>
+                  <td className="p-3 text-sm font-bold text-slate-800">{o.customerName || 'Guest'}<br/><span className="text-[11px] text-slate-400 font-mono">{o.customerPhone || 'N/A'}</span></td>
                   <td className="p-3 text-xs text-slate-500 whitespace-nowrap">{new Date(o.completedAt || o.time).toLocaleString()}</td>
                   <td className="p-3"><p className="font-bold text-sm">Table {o.table}</p><p className="text-[11px] text-slate-500">{o.items.map(i => `${i.qty}x ${i.name}`).join(', ')}</p></td>
                   <td className="p-3 whitespace-nowrap"><span className={`px-2 py-1 rounded-md text-[11px] font-bold ${o.payment === 'Online' ? 'bg-indigo-50 text-indigo-700' : 'bg-amber-50 text-amber-700'}`}>{o.payment}</span></td>
