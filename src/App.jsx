@@ -365,7 +365,7 @@ function AdminLoginModal({ onClose, onSuccess }) {
   );
 }
 
-/* ---------------- CUSTOMER VIEW (PIZZA HUT STYLE CARD & ADD BUTTON INSIDE CARD) ---------------- */
+/* ---------------- CUSTOMER VIEW WITH PIZZA HUT STYLE BANNER & CATEGORY IMAGES ---------------- */
 function CustomerView({ tableNumber, customerName, customerPhone, menuItems, activeOrders, coupons, cafeConfig, onPlaceOrder, onExit }) {
   const [cart, setCart] = useState([]); 
   const [checkout, setCheckout] = useState(false);
@@ -443,8 +443,7 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
             <div className="bg-purple-950/50 px-4 py-1.5 rounded-full border border-purple-700/50"><h1 className="text-sm font-black tracking-widest uppercase text-purple-200">Table {tableNumber} | {customerName || 'Guest'}</h1></div>
             <div className="w-9 h-9" />
           </div>
-
-          {/* Category Icons & Names Scrollable Bar */}
+          {/* Categories with Image Icons */}
           <div className="flex overflow-x-auto gap-3 pb-2 pt-1 scrollbar-hide">
             <button onClick={() => { playSfx('click'); setActiveCat('All'); }} className="flex flex-col items-center shrink-0 group">
               <div className={`w-14 h-14 rounded-2xl flex items-center justify-center border-2 transition-all ${activeCat === 'All' ? 'bg-white text-purple-900 border-white shadow-lg scale-105' : 'bg-purple-800/80 text-purple-200 border-purple-700'}`}>
@@ -491,20 +490,20 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
 
           <div className="space-y-3 pb-24">
             {displayedMenu.filter(i => i.stock).map(it => (
-              <div key={it.id} className="bg-white p-3 rounded-2xl shadow-sm border border-slate-200 flex gap-3 relative">
+              <div key={it.id} className="bg-white p-3 rounded-2xl shadow-sm border border-slate-200 flex gap-3">
                 <div className="w-20 h-20 bg-slate-100 rounded-xl overflow-hidden shrink-0 flex items-center justify-center">{it.img ? <img src={it.img} alt="" className="w-full h-full object-cover" /> : <ImageIcon className="w-8 h-8 text-slate-300" />}</div>
                 <div className="flex-1 flex flex-col justify-between py-1">
                   <div>
-                    <h3 className="font-black text-slate-900 leading-tight pr-12">{it.name}</h3>
+                    <h3 className="font-black text-slate-900 leading-tight">{it.name}</h3>
                     {it.desc && <p className="text-[11px] text-slate-500 font-medium leading-tight mt-0.5">{it.desc}</p>}
                     
-                    {/* Size Variants Display inside card */}
+                    {/* Size Variants Display */}
                     {it.v && it.v.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-2">
+                      <div className="flex flex-wrap gap-1.5 mt-2">
                         {it.v.map((x, i) => (
-                          <button key={i} onClick={() => addVariant(it, x[0], x[1])} className="px-2 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg text-[10px] font-bold border border-purple-200 active:scale-95 flex items-center gap-1">
-                            <span>{x[0]}</span>
-                            <span className="text-purple-900 font-black">₹{x[1]}</span>
+                          <button key={i} onClick={() => addVariant(it, x[0], x[1])} className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg text-xs font-bold border border-purple-200 active:scale-95 flex flex-col items-start">
+                            <span className="text-[10px] text-purple-500 uppercase">{x[0]}</span>
+                            <span>₹{x[1]}</span>
                           </button>
                         ))}
                       </div>
@@ -514,7 +513,7 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
                   {!it.v && (
                     <div className="flex justify-between items-end mt-1">
                       <span className="font-black text-purple-700 text-lg">₹{it.price}</span>
-                      <button onClick={() => addSimple(it)} className="bg-purple-100 text-purple-800 px-4 py-1.5 rounded-xl text-xs font-bold active:scale-95 hover:bg-purple-200 shadow-sm">Add +</button>
+                      <button onClick={() => addSimple(it)} className="bg-purple-100 text-purple-800 px-4 py-1.5 rounded-xl text-xs font-bold active:scale-95 hover:bg-purple-200">Add +</button>
                     </div>
                   )}
                 </div>
@@ -753,7 +752,7 @@ function CouponsTab({ coupons, db }) {
   );
 }
 
-/* ---------------- MENU CRUD TAB WITH FIXED SAVE FORM ---------------- */
+/* ---------------- MENU CRUD TAB WITH FIXED SAVE & VARIANTS ---------------- */
 function MenuTab({ menuItems, db }) {
   const [edit, setEdit] = useState(undefined);
   const [search, setSearch] = useState('');
@@ -871,7 +870,7 @@ function MenuForm({ item, categories, descriptions, onSave, onClose }) {
 
   return (
     <Modal title={item?.id ? 'Edit Menu Item' : 'New Menu Item'} onClose={onClose}>
-      <form onSubmit={submit} className="space-y-4">
+      <form onSubmit={submit} className="space-y-4 pb-16">
         <div><label className="text-xs font-bold text-slate-500 uppercase">Item Name</label><input value={name} onChange={e => setName(e.target.value)} className={inpStyle} required /></div>
         
         <div className="grid grid-cols-2 gap-3">
@@ -901,7 +900,7 @@ function MenuForm({ item, categories, descriptions, onSave, onClose }) {
                 <option value="Regular">Regular</option>
               </select>
               <input type="number" value={variantPrice} onChange={e => setVariantPrice(e.target.value)} placeholder="Price (₹)" className="flex-1 border rounded-xl px-3 py-2 text-xs font-bold bg-white" />
-              <button type="button" onClick={addVariantItem} className="bg-purple-700 text-white px-4 py-2 rounded-xl text-xs font-bold">Add</button>
+              <button type="button" onClick={addVariantItem} className="bg-purple-700 text-white px-4 py-2 rounded-xl text-xs font-bold shrink-0">Add</button>
             </div>
             <div className="flex flex-wrap gap-1.5 mt-2">
               {variantList.map((v, i) => (
@@ -938,7 +937,10 @@ function MenuForm({ item, categories, descriptions, onSave, onClose }) {
           <div className="flex gap-3 items-center mt-1"><div className="w-14 h-14 bg-slate-100 rounded-xl overflow-hidden flex justify-center items-center">{img ? <img src={img} className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-slate-300" />}</div><button type="button" onClick={() => { playSfx('click'); fileRef.current.click(); }} className="bg-purple-100 text-purple-800 font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-1.5"><Upload className="w-3.5 h-3.5"/> Upload</button></div>
         </div>
 
-        <button type="submit" className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-4 rounded-xl mt-4">Save Menu Item</button>
+        {/* Fixed Save Button inside Card */}
+        <div className="pt-2">
+          <button type="submit" className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-4 rounded-xl shadow-lg">Save Menu Item</button>
+        </div>
       </form>
     </Modal>
   );
@@ -1024,7 +1026,7 @@ function InvSection({ title, icon, items, colName, db, prefix, search }) {
       </table></div>
       {edit !== undefined && (
         <Modal title={edit?.id ? 'Edit Item' : 'Add Item'} onClose={() => setEdit(undefined)}>
-          <form onSubmit={save} className="space-y-3">
+          <form onSubmit={save} className="space-y-3 pb-10">
             <div>
               <label className="text-xs font-bold text-slate-500 uppercase">Name</label>
               <input name="name" list={`name-list-${prefix}`} defaultValue={edit?.name} className={inpStyle} required />
@@ -1176,11 +1178,10 @@ function HistoryTab({ history, stockInv, iceInv, menuItems, db }) {
 
 /* ---------------- SETTINGS TAB (BANNER UPLOAD) ---------------- */
 function SettingsTab({ cafeConfig, db }) {
-  const fileRef = useRef(null);
+  const logoRef = useRef(null);
   const [b1, setB1] = useState(cafeConfig.banners?.[0]?.img || '');
   const [b2, setB2] = useState(cafeConfig.banners?.[1]?.img || '');
   const [b3, setB3] = useState(cafeConfig.banners?.[2]?.img || '');
-  const logoRef = useRef(null);
 
   const saveLogo = async (url) => {
     playSfx('save');
