@@ -60,12 +60,12 @@ const readImg = (f) => new Promise((res) => {
 });
 
 const initialMenu = [
-  { id: 'p1', category: 'Pizza', name: 'Small Pizza', price: 139, stock: true, ingredients: [{ name: 'Pizza Base', cost: 30 }, { name: 'Cheese', cost: 40 }] },
-  { id: 'p2', category: 'Pizza', name: 'Classic Margarita Pizza', price: 149, v: [['Regular', 149], ['Large', 189]], stock: true, ingredients: [{ name: 'Base', cost: 35 }, { name: 'Mozzarella', cost: 50 }] }
+  { id: 'p1', category: 'Pizza', name: 'Small Pizza', price: 139, stock: true },
+  { id: 'p2', category: 'Pizza', name: 'Classic Margarita Pizza', price: 149, v: [['Regular', 149], ['Large', 189]], stock: true }
 ];
 
-const initialStock = [{ id: 'i1', name: 'Pizza Base', qty: 40, price: 500, min: 10 }, { id: 'i2', name: 'Burger Buns', qty: 30, price: 300, min: 10 }];
-const initialIceCream = [{ id: 'ic1', name: 'Vanilla', qty: 50, price: 400, min: 10 }, { id: 'ic2', name: 'Chocolate', qty: 30, price: 350, min: 10 }];
+const initialStock = [{ id: 'i1', name: 'Pizza Base', qty: 40, price: 500, min: 10 }];
+const initialIceCream = [{ id: 'ic1', name: 'Vanilla', qty: 50, price: 400, min: 10 }];
 const initialTables = Array.from({ length: 15 }, (_, i) => ({ id: `t${i + 1}`, name: `${i + 1}` }));
 
 /* ---------------- FIREBASE CONFIG ---------------- */
@@ -106,18 +106,8 @@ export default function App() {
   const [iceInv, setIceInv] = useState([]);
   const [coupons, setCoupons] = useState([]);
   const [cafeLogo, setCafeLogo] = useState('');
-
-  useEffect(() => {
-    const checkReminder = () => {
-      const now = new Date();
-      if (now.getHours() === 23 && now.getMinutes() === 0) {
-        speak("Reminder! Please update your daily inventory stocks.");
-        alert("🌙 Nightly Reminder: Please update your inventory stocks for the day!");
-      }
-    };
-    const t = setInterval(checkReminder, 60000);
-    return () => clearInterval(t);
-  }, []);
+  const [customBanner, setCustomBanner] = useState('');
+  const [categoryImages, setCategoryImages] = useState({});
 
   useEffect(() => {
     const unsubMenu = onSnapshot(collection(db, 'eternal_menu_v2'), (snap) => {
@@ -165,18 +155,16 @@ export default function App() {
     });
 
     const unsubSettings = onSnapshot(doc(db, 'settings', 'config'), (snap) => {
-      if (snap.exists()) setCafeLogo(snap.data().logo || '');
+      if (snap.exists()) {
+        setCafeLogo(snap.data().logo || '');
+        setCustomBanner(snap.data().banner || '');
+        setCategoryImages(snap.data().catImages || {});
+      }
     });
 
     return () => {
       unsubMenu(); unsubOrders(); unsubHistory(); unsubTables(); unsubStock(); unsubIce(); unsubCoupons(); unsubSettings();
     };
-  }, []);
-
-  useEffect(() => {
-    const unlock = () => { playSfx('click'); document.removeEventListener('click', unlock); };
-    document.addEventListener('click', unlock);
-    return () => document.removeEventListener('click', unlock);
   }, []);
 
   const placeOrder = async (tbl, cart, total, payment, name, phone, discount = 0) => {
@@ -188,19 +176,27 @@ export default function App() {
   };
 
   const completeOrder = async (o) => {
-    const completedData = { ...o, status: 'Completed', completedAt: Date.now() };
+    const now = Date.now();
+    const completedData = { ...o, status: 'Completed', completedAt: now };
     await setDoc(doc(db, 'history', o.id), completedData);
     await deleteDoc(doc(db, 'orders', o.id));
     playSfx('save');
 
-    // Send WhatsApp Bill matching Cash Memo format
+    // Send WhatsApp Bill with Proper Date/Time
     if (o.customerPhone) {
-      const dateStr = new Date(o.completedAt).toLocaleDateString();
+      const dateObj = new Date(now);
+      const dateStr = dateObj.toLocaleDateString();
+      const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       const itemsText = o.items.map(i => `${i.name} | ${i.qty} | ₹${i.price * i.qty}`).join('\n');
       const discountText = o.discount ? `Discount Applied: -₹${o.discount}\n` : '';
-      const msg = `*${CAFE_NAME}*\n${CAFE_ADDRESS}\n--------------------\n*Cash Memo*\nDate : ${dateStr}   Bill No.: #${o.id}\nT.No.: ${o.table}   Cust.: ${o.customerName || 'Guest'}\n--------------------\n*Particulars | Qty | Amount*\n${itemsText}\n--------------------\n${discountText}*Total : ₹${o.total}*\n--------------------\n    Thank You      Visit Again ✨`;
+      const msg = `*${CAFE_NAME}*\n${CAFE_ADDRESS}\n--------------------\n*Cash Memo*\nDate : ${dateStr} ${timeStr}   Bill No.: #${o.id}\nT.No.: ${o.table}   Cust.: ${o.customerName || 'Guest'}\n--------------------\n*Particulars | Qty | Amount*\n${itemsText}\n--------------------\n${discountText}*Total : ₹${o.total}*\n--------------------\n    Thank You      Visit Again ✨`;
       const wpUrl = `https://wa.me/91${o.customerPhone}?text=${encodeURIComponent(msg)}`;
       window.open(wpUrl, '_blank');
+    }
+
+    // Auto exit table session if current customer completes order
+    if (table === String(o.table)) {
+      exitTable();
     }
   };
 
@@ -231,23 +227,11 @@ export default function App() {
     setMode('landing');
   };
 
-  const adminLoginSuccess = () => {
-    setIsAdminAuth(true);
-    localStorage.setItem('ec_admin_auth', 'true');
-    setMode('admin');
-  };
-
-  const adminLogout = () => {
-    setIsAdminAuth(false);
-    localStorage.removeItem('ec_admin_auth');
-    setMode('landing');
-  };
-
   return (
     <div className="min-h-screen bg-purple-950 font-sans text-slate-100 selection:bg-purple-500">
-      {mode === 'landing' && <LandingView tables={tables} activeOrders={activeOrders} logo={cafeLogo} onJoin={joinTable} onAdminLogin={adminLoginSuccess} />}
-      {mode === 'customer' && <CustomerView tableNumber={table} customerName={customerName} customerPhone={customerPhone} menuItems={menuItems} activeOrders={activeOrders} coupons={coupons} onPlaceOrder={placeOrder} onExit={exitTable} />}
-      {mode === 'admin' && isAdminAuth && <AdminDashboard {...{ activeOrders, setActiveOrders, orderHistory, setOrderHistory, completeOrder, cancelOrder, menuItems, setMenuItems, tables, setTables, stockInv, setStockInv, iceInv, setIceInv, coupons, setCoupons, cafeLogo, setCafeLogo, db }} onExit={adminLogout} />}
+      {mode === 'landing' && <LandingView tables={tables} activeOrders={activeOrders} logo={cafeLogo} onJoin={joinTable} onAdminLogin={() => { setIsAdminAuth(true); localStorage.setItem('ec_admin_auth', 'true'); setMode('admin'); }} />}
+      {mode === 'customer' && <CustomerView tableNumber={table} customerName={customerName} customerPhone={customerPhone} menuItems={menuItems} activeOrders={activeOrders} coupons={coupons} banner={customBanner} catImages={categoryImages} onPlaceOrder={placeOrder} onExit={exitTable} />}
+      {mode === 'admin' && isAdminAuth && <AdminDashboard {...{ activeOrders, setActiveOrders, orderHistory, setOrderHistory, completeOrder, cancelOrder, menuItems, setMenuItems, tables, setTables, stockInv, setStockInv, iceInv, setIceInv, coupons, setCoupons, cafeLogo, setCafeLogo, customBanner, setCustomBanner, categoryImages, setCategoryImages, db }} onExit={() => { setIsAdminAuth(false); localStorage.removeItem('ec_admin_auth'); setMode('landing'); }} />}
     </div>
   );
 }
@@ -361,26 +345,38 @@ function AdminLoginModal({ onClose, onSuccess }) {
   );
 }
 
-/* ---------------- CUSTOMER VIEW WITH BANNER & ALL MENU DEFAULT ---------------- */
-function CustomerView({ tableNumber, customerName, customerPhone, menuItems, activeOrders, coupons, onPlaceOrder, onExit }) {
+/* ---------------- CUSTOMER VIEW WITH BANNER & CATEGORY IMAGES ---------------- */
+function CustomerView({ tableNumber, customerName, customerPhone, menuItems, activeOrders, coupons, banner, catImages, onPlaceOrder, onExit }) {
   const [cart, setCart] = useState([]); 
   const [checkout, setCheckout] = useState(false);
   const [selectedCoupon, setSelectedCoupon] = useState(null);
   const [couponCodeInput, setCouponCodeInput] = useState('');
   const [couponError, setCouponError] = useState('');
-  const [bannerIdx, setBannerIdx] = useState(0);
+  const bannerRef = useRef(null);
 
-  const banners = [
-    { title: "More Cheese. More Happiness.", desc: "Hot, cheesy and baked with love, just for you.", bg: "from-purple-900 to-indigo-900" },
-    { title: "Exclusive Combos", desc: "Save up to 30% OFF on selected family combos!", bg: "from-indigo-900 to-purple-950" },
-    { title: "Fresh Desserts & Shakes", desc: "Sweet endings to make your day happier.", bg: "from-purple-950 to-purple-900" }
-  ];
+  const defaultBanner = {
+    title: "More Cheese. More Happiness.",
+    desc: "Hot, cheesy and baked with love, just for you.",
+    bg: "from-purple-900 to-indigo-900"
+  };
 
-  // Auto scroll banner
+  // Auto scroll banner smoothly on mount
   useEffect(() => {
-    const t = setInterval(() => setBannerIdx(p => (p + 1) % banners.length), 4000);
-    return () => clearInterval(t);
-  }, [banners.length]);
+    if (bannerRef.current) {
+      const el = bannerRef.current;
+      let scrollAmount = 0;
+      const scrollTimer = setInterval(() => {
+        if (el) {
+          scrollAmount += 1;
+          if (scrollAmount >= el.scrollWidth - el.clientWidth) {
+            scrollAmount = 0;
+          }
+          el.scrollTo({ left: scrollAmount, behavior: 'smooth' });
+        }
+      }, 50);
+      return () => clearInterval(scrollTimer);
+    }
+  }, []);
 
   const cats = ['All', ...new Set(menuItems.map(i => i.category))]; 
   const [activeCat, setActiveCat] = useState('All');
@@ -438,26 +434,41 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
             <div className="bg-purple-950/50 px-4 py-1.5 rounded-full border border-purple-700/50"><h1 className="text-sm font-black tracking-widest uppercase text-purple-200">Table {tableNumber} | {customerName || 'Guest'}</h1></div>
             <div className="w-9 h-9" />
           </div>
-          {/* Categories with Image Icons */}
-          <div className="flex overflow-x-auto gap-2 pb-2 scrollbar-hide">
-            <button onClick={() => { playSfx('click'); setActiveCat('All'); }} className={`whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-bold shrink-0 transition-colors ${activeCat === 'All' ? 'bg-white text-purple-900 shadow-md' : 'bg-purple-800/80 text-purple-200'}`}>All</button>
-            {cats.filter(c => c !== 'All').map(c => (
-              <button key={c} onClick={() => { playSfx('click'); setActiveCat(c); }} className={`whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-bold shrink-0 transition-colors flex items-center gap-1.5 ${activeCat === c ? 'bg-white text-purple-900 shadow-md' : 'bg-purple-800/80 text-purple-200'}`}>
-                <span>{c}</span>
-              </button>
-            ))}
+
+          {/* Categories with Image Icons on Top & Name Below */}
+          <div ref={bannerRef} className="flex overflow-x-auto gap-3 pb-2 scrollbar-hide">
+            <button onClick={() => { playSfx('click'); setActiveCat('All'); }} className="flex flex-col items-center shrink-0 group">
+              <div className={`w-14 h-14 rounded-full overflow-hidden border-2 flex items-center justify-center bg-purple-800 ${activeCat === 'All' ? 'border-white scale-105 shadow-md' : 'border-purple-700 opacity-80'}`}>
+                <Coffee className="w-6 h-6 text-purple-200" />
+              </div>
+              <span className={`text-xs font-bold mt-1 ${activeCat === 'All' ? 'text-white' : 'text-purple-300'}`}>All</span>
+            </button>
+            {cats.filter(c => c !== 'All').map(c => {
+              const catImg = catImages[c];
+              return (
+                <button key={c} onClick={() => { playSfx('click'); setActiveCat(c); }} className="flex flex-col items-center shrink-0 group">
+                  <div className={`w-14 h-14 rounded-full overflow-hidden border-2 flex items-center justify-center bg-purple-800 ${activeCat === c ? 'border-white scale-105 shadow-md' : 'border-purple-700 opacity-80'}`}>
+                    {catImg ? <img src={catImg} alt={c} className="w-full h-full object-cover" /> : <Utensils className="w-6 h-6 text-purple-200" />}
+                  </div>
+                  <span className={`text-xs font-bold mt-1 whitespace-nowrap ${activeCat === c ? 'text-white' : 'text-purple-300'}`}>{c}</span>
+                </button>
+              );
+            })}
           </div>
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 bg-slate-100">
-          {/* Auto-scrolling Banner */}
-          <div className={`w-full rounded-3xl bg-gradient-to-r ${banners[bannerIdx].bg} text-white p-5 mb-5 shadow-lg relative overflow-hidden transition-all duration-700`}>
-            <h2 className="text-xl font-black mb-1">{banners[bannerIdx].title}</h2>
-            <p className="text-xs text-purple-200 font-medium mb-3">{banners[bannerIdx].desc}</p>
-            <div className="flex gap-1.5">
-              {banners.map((_, i) => <div key={i} className={`h-1.5 rounded-full transition-all ${bannerIdx === i ? 'w-6 bg-white' : 'w-1.5 bg-white/40'}`}></div>)}
+          {/* Banner Image / Default Banner */}
+          {banner ? (
+            <div className="w-full h-36 rounded-3xl overflow-hidden mb-5 shadow-lg relative shrink-0">
+              <img src={banner} alt="Banner" className="w-full h-full object-cover" />
             </div>
-          </div>
+          ) : (
+            <div className={`w-full rounded-3xl bg-gradient-to-r ${defaultBanner.bg} text-white p-5 mb-5 shadow-lg relative overflow-hidden shrink-0`}>
+              <h2 className="text-xl font-black mb-1">{defaultBanner.title}</h2>
+              <p className="text-xs text-purple-200 font-medium">{defaultBanner.desc}</p>
+            </div>
+          )}
 
           {status === 'Verifying' && <PaymentTimer order={tableOrder} />}
           {status === 'Pending' && <div className="bg-purple-100 border-l-4 border-purple-600 text-purple-900 p-4 rounded-2xl mb-4 shadow-sm"><p className="font-black text-lg">Order Placed!</p><p className="text-sm opacity-80">Waiting for restaurant confirmation.</p></div>}
@@ -646,7 +657,7 @@ function AdminDashboard(p) {
           {tab === 'coupons' && <CouponsTab coupons={p.coupons} db={p.db} />}
           {tab === 'qr' && <QRTab logo={p.cafeLogo} />}
           {tab === 'history' && <HistoryTab history={p.orderHistory} stockInv={p.stockInv} iceInv={p.iceInv} menuItems={p.menuItems} db={p.db} />}
-          {tab === 'settings' && <SettingsTab logo={p.cafeLogo} db={p.db} />}
+          {tab === 'settings' && <SettingsTab logo={p.cafeLogo} banner={p.customBanner} catImages={p.categoryImages} db={p.db} />}
         </div>
       </main>
     </div>
@@ -733,7 +744,7 @@ function CouponsTab({ coupons, db }) {
   );
 }
 
-/* ---------------- MENU CRUD TAB WITH SEPARATE VARIANTS & PRICE ---------------- */
+/* ---------------- MENU CRUD TAB WITH ADJUSTED BUTTON ---------------- */
 function MenuTab({ menuItems, db }) {
   const [edit, setEdit] = useState(undefined);
   const [search, setSearch] = useState('');
@@ -772,7 +783,7 @@ function MenuTab({ menuItems, db }) {
             <Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
             <input type="text" placeholder="Search menu..." value={search} onChange={e => setSearch(e.target.value)} className="w-full bg-white border-2 border-slate-200 rounded-xl pl-9 pr-3 py-2 text-sm font-bold outline-none focus:border-purple-600" />
           </div>
-          <button onClick={() => { playSfx('click'); setEdit({ name: '', category: 'Pizza', price: 100, desc: '', v: null, ingredients: [], stock: true }); }} className="bg-purple-700 hover:bg-purple-800 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-1.5 text-sm shrink-0"><Plus className="w-4 h-4" /> Add Menu</button>
+          <button onClick={() => { playSfx('click'); setEdit({ name: '', category: 'Pizza', price: 100, desc: '', v: null, ingredients: [], stock: true }); }} className="bg-purple-700 hover:bg-purple-800 text-white px-4 py-2.5 rounded-xl font-bold flex items-center gap-1.5 text-sm shrink-0"><Plus className="w-4 h-4" /> Add Menu</button>
         </div>
       </div>
       <div className="overflow-x-auto"><table className="w-full text-left min-w-[700px]">
@@ -880,7 +891,7 @@ function MenuForm({ item, categories, descriptions, onSave, onClose }) {
                 <option value="Regular">Regular</option>
               </select>
               <input type="number" value={variantPrice} onChange={e => setVariantPrice(e.target.value)} placeholder="Price (₹)" className="flex-1 border rounded-xl px-3 py-2 text-xs font-bold bg-white" />
-              <button type="button" onClick={addVariantItem} className="bg-purple-700 text-white px-4 py-2 rounded-xl text-xs font-bold">Add</button>
+              <button type="button" onClick={addVariantItem} className="bg-purple-700 text-white px-4 py-2 rounded-xl text-xs font-bold shrink-0">Add</button>
             </div>
             <div className="flex flex-wrap gap-1.5 mt-2">
               {variantList.map((v, i) => (
@@ -917,7 +928,7 @@ function MenuForm({ item, categories, descriptions, onSave, onClose }) {
           <div className="flex gap-3 items-center mt-1"><div className="w-14 h-14 bg-slate-100 rounded-xl overflow-hidden flex justify-center items-center">{img ? <img src={img} className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-slate-300" />}</div><button type="button" onClick={() => { playSfx('click'); fileRef.current.click(); }} className="bg-purple-100 text-purple-800 font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-1.5"><Upload className="w-3.5 h-3.5"/> Upload</button></div>
         </div>
 
-        <button type="submit" className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-3.5 rounded-xl mt-4">Save Menu Item</button>
+        <button type="submit" className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-4 rounded-xl mt-4">Save Menu Item</button>
       </form>
     </Modal>
   );
@@ -1153,24 +1164,57 @@ function HistoryTab({ history, stockInv, iceInv, menuItems, db }) {
   );
 }
 
-/* ---------------- SETTINGS TAB ---------------- */
-function SettingsTab({ logo, db }) {
+/* ---------------- SETTINGS TAB WITH BANNER & CATEGORY IMAGE UPLOAD ---------------- */
+function SettingsTab({ logo, banner, catImages, db }) {
   const fileRef = useRef(null);
-  const saveLogo = async (url) => {
+  const bannerRef = useRef(null);
+  const catFileRef = useRef(null);
+  const [selectedCat, setSelectedCat] = useState('Pizza');
+
+  const saveLogo = async (url) => { playSfx('save'); await setDoc(doc(db, 'settings', 'config'), { logo: url, banner, catImages }, { merge: true }); };
+  const saveBanner = async (url) => { playSfx('save'); await setDoc(doc(db, 'settings', 'config'), { logo, banner: url, catImages }, { merge: true }); };
+  const saveCatImg = async (cat, url) => {
     playSfx('save');
-    await setDoc(doc(db, 'settings', 'config'), { logo: url });
+    const updated = { ...catImages, [cat]: url };
+    await setDoc(doc(db, 'settings', 'config'), { logo, banner, catImages: updated }, { merge: true });
   };
+
+  const categories = ['Pizza', 'Garlic Bread', 'Pasta', 'Fries', 'Sandwich', 'Maggie', 'Panini', 'Burger', 'Momos', 'Frankie', 'Combos', 'Beverages', 'Waffles', 'Desserts', 'Scoop Ice Cream', 'Mocktails', 'Thick Shakes', 'Lattes'];
+
   return (
-    <div className="bg-white rounded-3xl border border-slate-200 p-8 max-w-xl">
-      <h2 className="text-2xl font-black text-slate-900 mb-6">Café Settings</h2>
-      <div className="flex flex-col items-center bg-slate-50 p-8 rounded-3xl border-2 border-dashed border-slate-200">
-        <div className="w-32 h-32 bg-white rounded-full shadow-lg flex items-center justify-center overflow-hidden mb-5 border-4 border-purple-100">
-          {logo ? <img src={logo} alt="Logo" className="w-full h-full object-cover"/> : <Coffee className="w-12 h-12 text-purple-300" />}
+    <div className="space-y-6 max-w-xl">
+      <div className="bg-white rounded-3xl border border-slate-200 p-8">
+        <h2 className="text-2xl font-black text-slate-900 mb-6">Café Logo & Banner Settings</h2>
+        <div className="space-y-6">
+          <div className="flex flex-col items-center bg-slate-50 p-6 rounded-3xl border-2 border-dashed border-slate-200">
+            <div className="w-24 h-24 bg-white rounded-full shadow-lg flex items-center justify-center overflow-hidden mb-4 border-4 border-purple-100">
+              {logo ? <img src={logo} alt="Logo" className="w-full h-full object-cover"/> : <Coffee className="w-10 h-10 text-purple-300" />}
+            </div>
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={async (e) => { if (e.target.files[0]) saveLogo(await readImg(e.target.files[0])); }} />
+            <button onClick={() => { playSfx('click'); fileRef.current.click(); }} className="bg-purple-700 hover:bg-purple-800 text-white font-bold px-5 py-2.5 rounded-xl flex items-center gap-2 text-sm shadow-md"><Upload className="w-4 h-4"/> Upload Logo</button>
+          </div>
+
+          <div className="flex flex-col items-center bg-slate-50 p-6 rounded-3xl border-2 border-dashed border-slate-200">
+            <div className="w-full h-28 bg-white rounded-2xl shadow-md overflow-hidden mb-4 border-2 border-purple-100 flex items-center justify-center">
+              {banner ? <img src={banner} alt="Banner" className="w-full h-full object-cover"/> : <span className="text-xs font-bold text-slate-400">Default Banner Active</span>}
+            </div>
+            <input ref={bannerRef} type="file" accept="image/*" className="hidden" onChange={async (e) => { if (e.target.files[0]) saveBanner(await readImg(e.target.files[0])); }} />
+            <button onClick={() => { playSfx('click'); bannerRef.current.click(); }} className="bg-purple-700 hover:bg-purple-800 text-white font-bold px-5 py-2.5 rounded-xl flex items-center gap-2 text-sm shadow-md"><Upload className="w-4 h-4"/> Upload Banner Image</button>
+            {banner && <button onClick={() => saveBanner('')} className="text-red-500 font-bold text-xs mt-3 hover:underline">Remove Custom Banner</button>}
+          </div>
+
+          <div className="bg-slate-50 p-6 rounded-3xl border space-y-4">
+            <h3 className="font-black text-slate-800 text-sm">Category Circle Images</h3>
+            <div className="flex gap-2">
+              <select value={selectedCat} onChange={e => setSelectedCat(e.target.value)} className={inpStyle + ' py-2 text-sm'}>
+                {categories.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <input ref={catFileRef} type="file" accept="image/*" className="hidden" onChange={async (e) => { if (e.target.files[0]) saveCatImg(selectedCat, await readImg(e.target.files[0])); }} />
+              <button onClick={() => catFileRef.current.click()} className="bg-indigo-600 text-white font-bold px-4 rounded-xl text-xs shrink-0">Upload Icon</button>
+            </div>
+            {catImages[selectedCat] && <div className="w-16 h-16 rounded-full overflow-hidden border"><img src={catImages[selectedCat]} className="w-full h-full object-cover" /></div>}
+          </div>
         </div>
-        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={async (e) => { if (e.target.files[0]) saveLogo(await readImg(e.target.files[0])); }} />
-        <button onClick={() => { playSfx('click'); fileRef.current.click(); }} className="bg-purple-700 hover:bg-purple-800 text-white font-bold px-6 py-3 rounded-xl flex items-center gap-2 shadow-md"><Upload className="w-5 h-5"/> Upload Logo</button>
-        {logo && <button onClick={() => saveLogo('')} className="text-red-500 font-bold text-sm mt-4 hover:underline">Remove Logo</button>}
-        <p className="text-xs text-slate-400 text-center mt-4 max-w-xs">Upload a circular logo for the landing page wheel and printed QR cards.</p>
       </div>
     </div>
   );
