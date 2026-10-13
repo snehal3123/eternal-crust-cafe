@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Coffee, Utensils, Plus, Minus, ChevronLeft, LayoutDashboard, LogOut,
   CheckCircle, Clock, ChefHat, Bell, Edit, Trash2, ToggleLeft, ToggleRight, QrCode, Printer,
-  CreditCard, Banknote, X, History, Download, Image as ImageIcon, Package, AlertTriangle, Upload, IceCream, Lock, Eye, EyeOff, Settings, Volume2, VolumeX, Mic, Search, MessageSquare, Tag, Trash
+  CreditCard, Banknote, X, History, Download, Image as ImageIcon, Package, AlertTriangle, Upload, IceCream, Lock, Eye, EyeOff, Settings, Volume2, VolumeX, Mic, Search, MessageSquare, Tag
 } from 'lucide-react';
 
 /* ---------------- AUDIO & VOICE ENGINE ---------------- */
@@ -393,7 +393,7 @@ function AdminLoginModal({ onClose, onSuccess }) {
   );
 }
 
-/* ---------------- CUSTOMER VIEW WITH SEARCH & CLEAN BANNER ---------------- */
+/* ---------------- CUSTOMER VIEW ---------------- */
 function CustomerView({ tableNumber, customerName, customerPhone, menuItems, activeOrders, coupons, cafeConfig, onPlaceOrder, onExit }) {
   const [cart, setCart] = useState([]); 
   const [checkout, setCheckout] = useState(false);
@@ -482,13 +482,12 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
             <div className="w-9 h-9" />
           </div>
 
-          {/* Search Bar for Customer */}
+          {/* Search Bar */}
           <div className="relative mb-3">
             <Search className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
             <input type="text" placeholder="Search your favorite food..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-white/10 backdrop-blur-md border border-purple-700/50 rounded-2xl pl-10 pr-4 py-2.5 text-sm font-bold text-white placeholder-purple-300 outline-none focus:bg-white focus:text-slate-900 transition-all" />
           </div>
 
-          {/* Categories with Image Icons */}
           <div className="flex overflow-x-auto gap-3 pb-2 pt-1 scrollbar-hide">
             <button onClick={() => { playSfx('click'); setActiveCat('All'); setSearchQuery(''); }} className="flex flex-col items-center shrink-0 group">
               <div className={`w-14 h-14 rounded-2xl flex items-center justify-center border-2 transition-all ${activeCat === 'All' && !searchQuery ? 'bg-white text-purple-900 border-white shadow-lg scale-105' : 'bg-purple-800/80 text-purple-200 border-purple-700'}`}>
@@ -511,15 +510,19 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 bg-slate-100">
-          {/* Banner Layout without dark transparent shadow */}
+          {/* Banner without dark shadow */}
           <div className={`w-full rounded-3xl ${banners[bannerIdx].img ? 'bg-slate-900' : 'bg-gradient-to-r ' + banners[bannerIdx].bg} text-white p-5 mb-5 shadow-lg relative overflow-hidden transition-all duration-700 min-h-[150px] flex flex-col justify-end`}>
             {banners[bannerIdx].img ? (
               <img src={banners[bannerIdx].img} alt="" className="absolute inset-0 w-full h-full object-cover" />
             ) : null}
-            <div className={`relative z-10 ${banners[bannerIdx].img ? 'bg-black/40 p-3 rounded-2xl backdrop-blur-[2px]' : ''}`}>
-              <h2 className="text-xl font-black mb-1 drop-shadow-md">{banners[bannerIdx].title}</h2>
-              <p className="text-xs text-purple-100 font-medium mb-3 drop-shadow">{banners[bannerIdx].desc}</p>
-              <div className="flex gap-1.5">
+            <div className={`relative z-10 ${banners[bannerIdx].img ? '' : ''}`}>
+              {!banners[bannerIdx].img && (
+                <>
+                  <h2 className="text-xl font-black mb-1 drop-shadow-md">{banners[bannerIdx].title}</h2>
+                  <p className="text-xs text-purple-100 font-medium mb-3 drop-shadow">{banners[bannerIdx].desc}</p>
+                </>
+              )}
+              <div className="flex gap-1.5 mt-2">
                 {banners.map((_, i) => <div key={i} className={`h-1.5 rounded-full transition-all ${bannerIdx === i ? 'w-6 bg-white' : 'w-1.5 bg-white/40'}`}></div>)}
               </div>
             </div>
@@ -808,13 +811,33 @@ function MenuTab({ menuItems, db }) {
 
   const save = async (item) => {
     playSfx('save');
-    if (edit && edit.id) {
-      await updateDoc(doc(db, 'eternal_menu_v2', edit.id), item);
-    } else {
-      await setDoc(doc(db, 'eternal_menu_v2', 'm' + Date.now()), item);
+    try {
+      const dataToSave = {
+        name: item.name,
+        category: item.category,
+        desc: item.desc || '',
+        img: item.img || '',
+        price: Number(item.price),
+        stock: item.stock,
+        ingredients: item.ingredients || []
+      };
+      if (item.v && Array.isArray(item.v) && item.v.length > 0) {
+        dataToSave.v = item.v.map(v => ({ name: v[0], price: Number(v[1]) }));
+      } else {
+        dataToSave.v = null;
+      }
+
+      if (edit && edit.id) {
+        await updateDoc(doc(db, 'eternal_menu_v2', edit.id), dataToSave);
+      } else {
+        await setDoc(doc(db, 'eternal_menu_v2', 'm' + Date.now()), dataToSave);
+      }
+      setEdit(undefined);
+    } catch (err) {
+      alert('Error saving menu item: ' + err.message);
     }
-    setEdit(undefined);
   };
+
   const toggleStock = async (it) => {
     playSfx('click');
     await updateDoc(doc(db, 'eternal_menu_v2', it.id), { stock: !it.stock });
@@ -907,7 +930,7 @@ function MenuForm({ item, categories, descriptions, onSave, onClose }) {
       desc: desc.trim(),
       img,
       price: hasVariants && variantList.length > 0 ? variantList[0][1] : Number(price),
-      v: hasVariants && variantList.length > 0 ? variantList.map(v => [v[0], Number(v[1])]) : null,
+      v: hasVariants && variantList.length > 0 ? variantList : null,
       ingredients: cleanIngredients,
       stock: item ? item.stock : true
     });
@@ -935,8 +958,9 @@ function MenuForm({ item, categories, descriptions, onSave, onClose }) {
         {hasVariants && (
           <div className="bg-slate-50 p-3.5 rounded-2xl border space-y-3">
             <label className="text-xs font-black text-slate-700 uppercase">Add Size & Price</label>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <select value={variantSize} onChange={e => setVariantSize(e.target.value)} className="border rounded-xl px-3 py-2 text-xs font-bold bg-white w-full">
+            {/* Flex container inside card with proper wrap and width */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              <select value={variantSize} onChange={e => setVariantSize(e.target.value)} className="border rounded-xl px-3 py-2 text-xs font-bold bg-white">
                 <option value="Small">Small</option>
                 <option value="Medium">Medium</option>
                 <option value="Large">Large</option>
@@ -944,8 +968,8 @@ function MenuForm({ item, categories, descriptions, onSave, onClose }) {
                 <option value="Full">Full</option>
                 <option value="Regular">Regular</option>
               </select>
-              <input type="number" value={variantPrice} onChange={e => setVariantPrice(e.target.value)} placeholder="Price ₹" className="border rounded-xl px-3 py-2 text-xs font-bold bg-white w-full" />
-              <button type="button" onClick={addVariantItem} className="bg-purple-700 hover:bg-purple-800 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md w-full">Add Size</button>
+              <input type="number" value={variantPrice} onChange={e => setVariantPrice(e.target.value)} placeholder="Price ₹" className="flex-1 min-w-[90px] border rounded-xl px-3 py-2 text-xs font-bold bg-white" />
+              <button type="button" onClick={addVariantItem} className="bg-purple-700 hover:bg-purple-800 text-white px-4 py-2.5 rounded-xl text-xs font-bold shrink-0 shadow-md">Add Size</button>
             </div>
             <div className="flex flex-wrap gap-1.5 mt-2">
               {variantList.map((v, i) => (
@@ -1290,7 +1314,7 @@ function SettingsTab({ cafeConfig, db }) {
           <div><label className="text-[10px] font-bold text-slate-500 uppercase">Description</label><input type="text" value={b1Desc} onChange={e => setB1Desc(e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
           <div className="flex items-center gap-3">
             <input type="file" accept="image/*" onChange={async e => { if(e.target.files[0]) setB1Img(await readImg(e.target.files[0])); }} className="w-full text-xs" />
-            {b1Img && <button type="button" onClick={() => setB1Img('')} className="bg-red-100 text-red-600 px-3 py-1.5 rounded-xl text-xs font-bold">Remove Image</button>}
+            {b1Img && <button type="button" onClick={() => setB1Img('')} className="bg-red-100 text-red-600 px-3 py-1.5 rounded-xl text-xs font-bold shrink-0">Remove Image</button>}
           </div>
         </div>
 
@@ -1301,7 +1325,7 @@ function SettingsTab({ cafeConfig, db }) {
           <div><label className="text-[10px] font-bold text-slate-500 uppercase">Description</label><input type="text" value={b2Desc} onChange={e => setB2Desc(e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
           <div className="flex items-center gap-3">
             <input type="file" accept="image/*" onChange={async e => { if(e.target.files[0]) setB2Img(await readImg(e.target.files[0])); }} className="w-full text-xs" />
-            {b2Img && <button type="button" onClick={() => setB2Img('')} className="bg-red-100 text-red-600 px-3 py-1.5 rounded-xl text-xs font-bold">Remove Image</button>}
+            {b2Img && <button type="button" onClick={() => setB2Img('')} className="bg-red-100 text-red-600 px-3 py-1.5 rounded-xl text-xs font-bold shrink-0">Remove Image</button>}
           </div>
         </div>
 
@@ -1312,7 +1336,7 @@ function SettingsTab({ cafeConfig, db }) {
           <div><label className="text-[10px] font-bold text-slate-500 uppercase">Description</label><input type="text" value={b3Desc} onChange={e => setB3Desc(e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
           <div className="flex items-center gap-3">
             <input type="file" accept="image/*" onChange={async e => { if(e.target.files[0]) setB3Img(await readImg(e.target.files[0])); }} className="w-full text-xs" />
-            {b3Img && <button type="button" onClick={() => setB3Img('')} className="bg-red-100 text-red-600 px-3 py-1.5 rounded-xl text-xs font-bold">Remove Image</button>}
+            {b3Img && <button type="button" onClick={() => setB3Img('')} className="bg-red-100 text-red-600 px-3 py-1.5 rounded-xl text-xs font-bold shrink-0">Remove Image</button>}
           </div>
         </div>
 
