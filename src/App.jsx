@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Coffee, Utensils, Plus, Minus, ChevronLeft, LayoutDashboard, LogOut,
   CheckCircle, Clock, ChefHat, Bell, Edit, Trash2, ToggleLeft, ToggleRight, QrCode, Printer,
-  CreditCard, Banknote, X, History, Download, Image as ImageIcon, Package, AlertTriangle, Upload, IceCream, Lock, Eye, EyeOff, Settings, Volume2, VolumeX, Mic, Search, MessageSquare, Tag
+  CreditCard, Banknote, X, History, Download, Image as ImageIcon, Package, AlertTriangle, Upload, IceCream, Lock, Eye, EyeOff, Settings, Volume2, VolumeX, Mic, Search, MessageSquare, Tag, Trash
 } from 'lucide-react';
 
 /* ---------------- AUDIO & VOICE ENGINE ---------------- */
@@ -60,7 +60,7 @@ const readImg = (f) => new Promise((res) => {
 
 const initialMenu = [
   { id: 'p1', category: 'Pizza', name: 'Small Pizza', price: 139, stock: true, ingredients: [{ name: 'Pizza Base', cost: 30 }, { name: 'Cheese', cost: 40 }] },
-  { id: 'p2', category: 'Pizza', name: 'Classic Margarita Pizza', price: 149, v: [['Regular', 149], ['Large', 189]], stock: true, ingredients: [{ name: 'Base', cost: 35 }, { name: 'Mozzarella', cost: 50 }] }
+  { id: 'p2', category: 'Pizza', name: 'Classic Margarita Pizza', price: 149, v: [{name: 'Regular', price: 149}, {name: 'Large', price: 189}], stock: true, ingredients: [{ name: 'Base', cost: 35 }, { name: 'Mozzarella', cost: 50 }] }
 ];
 
 const initialStock = [{ id: 'i1', name: 'Pizza Base', qty: 40, price: 500, min: 10 }, { id: 'i2', name: 'Burger Buns', qty: 30, price: 300, min: 10 }];
@@ -123,7 +123,15 @@ export default function App() {
       if (snap.empty) {
         initialMenu.forEach(item => setDoc(doc(db, 'eternal_menu_v2', item.id), item));
       } else {
-        setMenuItems(snap.docs.map(d => ({ ...d.data(), id: d.id })));
+        const docs = snap.docs.map(d => {
+          const data = d.data();
+          let convertedV = null;
+          if (data.v && Array.isArray(data.v)) {
+            convertedV = data.v.map(x => Array.isArray(x) ? x : [x.name, x.price]);
+          }
+          return { ...data, id: d.id, v: convertedV };
+        });
+        setMenuItems(docs);
       }
     });
 
@@ -385,7 +393,7 @@ function AdminLoginModal({ onClose, onSuccess }) {
   );
 }
 
-/* ---------------- CUSTOMER VIEW WITH SEARCH BAR & CUSTOMIZABLE BANNERS ---------------- */
+/* ---------------- CUSTOMER VIEW WITH SEARCH & CLEAN BANNER ---------------- */
 function CustomerView({ tableNumber, customerName, customerPhone, menuItems, activeOrders, coupons, cafeConfig, onPlaceOrder, onExit }) {
   const [cart, setCart] = useState([]); 
   const [checkout, setCheckout] = useState(false);
@@ -401,13 +409,11 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
     { title: "Fresh Desserts & Shakes", desc: "Sweet endings to make your day happier.", bg: "from-purple-950 to-purple-900", img: "" }
   ];
 
-  const rawBanners = (cafeConfig.banners && cafeConfig.banners.length > 0) ? cafeConfig.banners : defaultBanners;
-  // Filter out banners that have neither an image nor text
-  const banners = rawBanners.filter(b => b.img || b.title || b.desc);
+  const banners = (cafeConfig.banners && cafeConfig.banners.length > 0) ? cafeConfig.banners : defaultBanners;
 
+  // Auto-scrolling banner slowly
   useEffect(() => {
-    if (banners.length <= 1) return;
-    const t = setInterval(() => setBannerIdx(p => (p + 1) % banners.length), 4000);
+    const t = setInterval(() => setBannerIdx(p => (p + 1) % banners.length), 5000);
     return () => clearInterval(t);
   }, [banners.length]);
 
@@ -455,9 +461,11 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
   };
 
   const displayedMenu = useMemo(() => {
-    let list = activeCat === 'All' ? menuItems : menuItems.filter(i => i.category === activeCat);
+    let list = menuItems;
     if (searchQuery.trim()) {
       list = list.filter(i => i.name.toLowerCase().includes(searchQuery.toLowerCase()) || i.category.toLowerCase().includes(searchQuery.toLowerCase()));
+    } else if (activeCat !== 'All') {
+      list = list.filter(i => i.category === activeCat);
     }
     return list;
   }, [menuItems, activeCat, searchQuery]);
@@ -474,15 +482,16 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
             <div className="w-9 h-9" />
           </div>
 
-          {/* Search Bar for Customer Side */}
+          {/* Search Bar for Customer */}
           <div className="relative mb-3">
-            <Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
-            <input type="text" placeholder="Search food items..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-white/90 border-0 rounded-xl pl-9 pr-3 py-2 text-xs font-bold text-slate-900 outline-none" />
+            <Search className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
+            <input type="text" placeholder="Search your favorite food..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-white/10 backdrop-blur-md border border-purple-700/50 rounded-2xl pl-10 pr-4 py-2.5 text-sm font-bold text-white placeholder-purple-300 outline-none focus:bg-white focus:text-slate-900 transition-all" />
           </div>
 
+          {/* Categories with Image Icons */}
           <div className="flex overflow-x-auto gap-3 pb-2 pt-1 scrollbar-hide">
-            <button onClick={() => { playSfx('click'); setActiveCat('All'); }} className="flex flex-col items-center shrink-0 group">
-              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center border-2 transition-all ${activeCat === 'All' ? 'bg-white text-purple-900 border-white shadow-lg scale-105' : 'bg-purple-800/80 text-purple-200 border-purple-700'}`}>
+            <button onClick={() => { playSfx('click'); setActiveCat('All'); setSearchQuery(''); }} className="flex flex-col items-center shrink-0 group">
+              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center border-2 transition-all ${activeCat === 'All' && !searchQuery ? 'bg-white text-purple-900 border-white shadow-lg scale-105' : 'bg-purple-800/80 text-purple-200 border-purple-700'}`}>
                 <Utensils className="w-6 h-6"/>
               </div>
               <span className="text-[11px] font-bold mt-1 text-purple-100">All</span>
@@ -490,8 +499,8 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
             {cats.filter(c => c !== 'All').map(c => {
               const catItem = menuItems.find(i => i.category === c && i.img);
               return (
-                <button key={c} onClick={() => { playSfx('click'); setActiveCat(c); }} className="flex flex-col items-center shrink-0 group">
-                  <div className={`w-14 h-14 rounded-2xl overflow-hidden flex items-center justify-center border-2 transition-all ${activeCat === c ? 'bg-white text-purple-900 border-white shadow-lg scale-105' : 'bg-purple-800/80 text-purple-200 border-purple-700'}`}>
+                <button key={c} onClick={() => { playSfx('click'); setActiveCat(c); setSearchQuery(''); }} className="flex flex-col items-center shrink-0 group">
+                  <div className={`w-14 h-14 rounded-2xl overflow-hidden flex items-center justify-center border-2 transition-all ${activeCat === c && !searchQuery ? 'bg-white text-purple-900 border-white shadow-lg scale-105' : 'bg-purple-800/80 text-purple-200 border-purple-700'}`}>
                     {catItem?.img ? <img src={catItem.img} alt={c} className="w-full h-full object-cover" /> : <Coffee className="w-6 h-6"/>}
                   </div>
                   <span className="text-[11px] font-bold mt-1 text-purple-100 truncate max-w-[60px]">{c}</span>
@@ -502,21 +511,19 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 bg-slate-100">
-          {/* Banner rendering ONLY if text or image exists */}
-          {banners.length > 0 && banners[bannerIdx] && (
-            <div className={`w-full rounded-3xl ${banners[bannerIdx].img ? 'bg-slate-900' : 'bg-gradient-to-r ' + (banners[bannerIdx].bg || 'from-purple-900 to-indigo-900')} text-white p-5 mb-5 shadow-lg relative overflow-hidden transition-all duration-700 min-h-[140px] flex flex-col justify-end`}>
-              {banners[bannerIdx].img && <img src={banners[bannerIdx].img} alt="" className="absolute inset-0 w-full h-full object-cover opacity-60" />}
-              <div className="relative z-10">
-                {banners[bannerIdx].title && <h2 className="text-xl font-black mb-1 drop-shadow-md">{banners[bannerIdx].title}</h2>}
-                {banners[bannerIdx].desc && <p className="text-xs text-purple-100 font-medium mb-3 drop-shadow">{banners[bannerIdx].desc}</p>}
-                {banners.length > 1 && (
-                  <div className="flex gap-1.5">
-                    {banners.map((_, i) => <div key={i} className={`h-1.5 rounded-full transition-all ${bannerIdx === i ? 'w-6 bg-white' : 'w-1.5 bg-white/40'}`}></div>)}
-                  </div>
-                )}
+          {/* Banner Layout without dark transparent shadow */}
+          <div className={`w-full rounded-3xl ${banners[bannerIdx].img ? 'bg-slate-900' : 'bg-gradient-to-r ' + banners[bannerIdx].bg} text-white p-5 mb-5 shadow-lg relative overflow-hidden transition-all duration-700 min-h-[150px] flex flex-col justify-end`}>
+            {banners[bannerIdx].img ? (
+              <img src={banners[bannerIdx].img} alt="" className="absolute inset-0 w-full h-full object-cover" />
+            ) : null}
+            <div className={`relative z-10 ${banners[bannerIdx].img ? 'bg-black/40 p-3 rounded-2xl backdrop-blur-[2px]' : ''}`}>
+              <h2 className="text-xl font-black mb-1 drop-shadow-md">{banners[bannerIdx].title}</h2>
+              <p className="text-xs text-purple-100 font-medium mb-3 drop-shadow">{banners[bannerIdx].desc}</p>
+              <div className="flex gap-1.5">
+                {banners.map((_, i) => <div key={i} className={`h-1.5 rounded-full transition-all ${bannerIdx === i ? 'w-6 bg-white' : 'w-1.5 bg-white/40'}`}></div>)}
               </div>
             </div>
-          )}
+          </div>
 
           {status === 'Verifying' && <PaymentTimer order={tableOrder} upiId={cafeConfig.upiId} />}
           {status === 'Pending' && <div className="bg-purple-100 border-l-4 border-purple-600 text-purple-900 p-4 rounded-2xl mb-4 shadow-sm"><p className="font-black text-lg">Order Placed!</p><p className="text-sm opacity-80">Waiting for restaurant confirmation.</p></div>}
@@ -790,7 +797,7 @@ function CouponsTab({ coupons, db }) {
   );
 }
 
-/* ---------------- MENU CRUD TAB WITH FIXED MODAL BUTTONS ---------------- */
+/* ---------------- MENU CRUD TAB ---------------- */
 function MenuTab({ menuItems, db }) {
   const [edit, setEdit] = useState(undefined);
   const [search, setSearch] = useState('');
@@ -900,7 +907,7 @@ function MenuForm({ item, categories, descriptions, onSave, onClose }) {
       desc: desc.trim(),
       img,
       price: hasVariants && variantList.length > 0 ? variantList[0][1] : Number(price),
-      v: hasVariants && variantList.length > 0 ? variantList : null,
+      v: hasVariants && variantList.length > 0 ? variantList.map(v => [v[0], Number(v[1])]) : null,
       ingredients: cleanIngredients,
       stock: item ? item.stock : true
     });
@@ -908,7 +915,7 @@ function MenuForm({ item, categories, descriptions, onSave, onClose }) {
 
   return (
     <Modal title={item?.id ? 'Edit Menu Item' : 'New Menu Item'} onClose={onClose}>
-      <form onSubmit={submit} className="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
+      <form onSubmit={submit} className="space-y-4 max-h-[75vh] overflow-y-auto pr-2">
         <div><label className="text-xs font-bold text-slate-500 uppercase">Item Name</label><input value={name} onChange={e => setName(e.target.value)} className={inpStyle} required /></div>
         
         <div className="grid grid-cols-2 gap-3">
@@ -928,8 +935,8 @@ function MenuForm({ item, categories, descriptions, onSave, onClose }) {
         {hasVariants && (
           <div className="bg-slate-50 p-3.5 rounded-2xl border space-y-3">
             <label className="text-xs font-black text-slate-700 uppercase">Add Size & Price</label>
-            <div className="flex flex-wrap items-center gap-2">
-              <select value={variantSize} onChange={e => setVariantSize(e.target.value)} className="border rounded-xl px-3 py-2 text-xs font-bold bg-white w-28">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <select value={variantSize} onChange={e => setVariantSize(e.target.value)} className="border rounded-xl px-3 py-2 text-xs font-bold bg-white w-full">
                 <option value="Small">Small</option>
                 <option value="Medium">Medium</option>
                 <option value="Large">Large</option>
@@ -937,8 +944,8 @@ function MenuForm({ item, categories, descriptions, onSave, onClose }) {
                 <option value="Full">Full</option>
                 <option value="Regular">Regular</option>
               </select>
-              <input type="number" value={variantPrice} onChange={e => setVariantPrice(e.target.value)} placeholder="Price ₹" className="flex-1 min-w-[80px] border rounded-xl px-3 py-2 text-xs font-bold bg-white" />
-              <button type="button" onClick={addVariantItem} className="bg-purple-700 hover:bg-purple-800 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md shrink-0">Add</button>
+              <input type="number" value={variantPrice} onChange={e => setVariantPrice(e.target.value)} placeholder="Price ₹" className="border rounded-xl px-3 py-2 text-xs font-bold bg-white w-full" />
+              <button type="button" onClick={addVariantItem} className="bg-purple-700 hover:bg-purple-800 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md w-full">Add Size</button>
             </div>
             <div className="flex flex-wrap gap-1.5 mt-2">
               {variantList.map((v, i) => (
@@ -1215,17 +1222,17 @@ function HistoryTab({ history, stockInv, iceInv, menuItems, db }) {
 function SettingsTab({ cafeConfig, db }) {
   const fileRef = useRef(null);
   const [upi, setUpi] = useState(cafeConfig.upiId || 'snehaltitkare58-2@okicici');
+  const [b1Title, setB1Title] = useState(cafeConfig.banners?.[0]?.title || 'More Cheese. More Happiness.');
+  const [b1Desc, setB1Desc] = useState(cafeConfig.banners?.[0]?.desc || 'Hot, cheesy and baked with love, just for you.');
   const [b1Img, setB1Img] = useState(cafeConfig.banners?.[0]?.img || '');
-  const [b1Title, setB1Title] = useState(cafeConfig.banners?.[0]?.title || '');
-  const [b1Desc, setB1Desc] = useState(cafeConfig.banners?.[0]?.desc || '');
 
+  const [b2Title, setB2Title] = useState(cafeConfig.banners?.[1]?.title || 'Exclusive Combos');
+  const [b2Desc, setB2Desc] = useState(cafeConfig.banners?.[1]?.desc || 'Save up to 30% OFF on selected family combos!');
   const [b2Img, setB2Img] = useState(cafeConfig.banners?.[1]?.img || '');
-  const [b2Title, setB2Title] = useState(cafeConfig.banners?.[1]?.title || '');
-  const [b2Desc, setB2Desc] = useState(cafeConfig.banners?.[1]?.desc || '');
 
+  const [b3Title, setB3Title] = useState(cafeConfig.banners?.[2]?.title || 'Fresh Desserts & Shakes');
+  const [b3Desc, setB3Desc] = useState(cafeConfig.banners?.[2]?.desc || 'Sweet endings to make your day happier.');
   const [b3Img, setB3Img] = useState(cafeConfig.banners?.[2]?.img || '');
-  const [b3Title, setB3Title] = useState(cafeConfig.banners?.[2]?.title || '');
-  const [b3Desc, setB3Desc] = useState(cafeConfig.banners?.[2]?.desc || '');
 
   const logoRef = useRef(null);
 
@@ -1274,42 +1281,42 @@ function SettingsTab({ cafeConfig, db }) {
       </div>
 
       <div className="bg-white rounded-3xl border border-slate-200 p-8 space-y-6">
-        <h2 className="text-2xl font-black text-slate-900">Manage 3 Banners (Text & Image)</h2>
+        <h2 className="text-2xl font-black text-slate-900">Manage 3 Banners (Text & Images)</h2>
         
         {/* Banner 1 */}
         <div className="bg-slate-50 p-4 rounded-2xl border space-y-3">
-          <h3 className="font-bold text-sm text-purple-900">Banner 1</h3>
-          <div><label className="text-xs font-bold text-slate-500 uppercase">Title Text</label><input type="text" value={b1Title} onChange={e => setB1Title(e.target.value)} placeholder="e.g. More Cheese. More Happiness." className={inpStyle + ' py-2 text-xs'} /></div>
-          <div><label className="text-xs font-bold text-slate-500 uppercase">Description Text</label><input type="text" value={b1Desc} onChange={e => setB1Desc(e.target.value)} placeholder="e.g. Hot, cheesy and baked with love" className={inpStyle + ' py-2 text-xs'} /></div>
+          <p className="font-black text-purple-900 text-sm">Banner 1</p>
+          <div><label className="text-[10px] font-bold text-slate-500 uppercase">Title</label><input type="text" value={b1Title} onChange={e => setB1Title(e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
+          <div><label className="text-[10px] font-bold text-slate-500 uppercase">Description</label><input type="text" value={b1Desc} onChange={e => setB1Desc(e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
           <div className="flex items-center gap-3">
             <input type="file" accept="image/*" onChange={async e => { if(e.target.files[0]) setB1Img(await readImg(e.target.files[0])); }} className="w-full text-xs" />
-            {b1Img && <button onClick={() => setB1Img('')} className="text-red-500 text-xs font-bold shrink-0">Remove Img</button>}
+            {b1Img && <button type="button" onClick={() => setB1Img('')} className="bg-red-100 text-red-600 px-3 py-1.5 rounded-xl text-xs font-bold">Remove Image</button>}
           </div>
         </div>
 
         {/* Banner 2 */}
         <div className="bg-slate-50 p-4 rounded-2xl border space-y-3">
-          <h3 className="font-bold text-sm text-purple-900">Banner 2</h3>
-          <div><label className="text-xs font-bold text-slate-500 uppercase">Title Text</label><input type="text" value={b2Title} onChange={e => setB2Title(e.target.value)} placeholder="Exclusive Combos" className={inpStyle + ' py-2 text-xs'} /></div>
-          <div><label className="text-xs font-bold text-slate-500 uppercase">Description Text</label><input type="text" value={b2Desc} onChange={e => setB2Desc(e.target.value)} placeholder="Save up to 30% OFF" className={inpStyle + ' py-2 text-xs'} /></div>
+          <p className="font-black text-purple-900 text-sm">Banner 2</p>
+          <div><label className="text-[10px] font-bold text-slate-500 uppercase">Title</label><input type="text" value={b2Title} onChange={e => setB2Title(e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
+          <div><label className="text-[10px] font-bold text-slate-500 uppercase">Description</label><input type="text" value={b2Desc} onChange={e => setB2Desc(e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
           <div className="flex items-center gap-3">
             <input type="file" accept="image/*" onChange={async e => { if(e.target.files[0]) setB2Img(await readImg(e.target.files[0])); }} className="w-full text-xs" />
-            {b2Img && <button onClick={() => setB2Img('')} className="text-red-500 text-xs font-bold shrink-0">Remove Img</button>}
+            {b2Img && <button type="button" onClick={() => setB2Img('')} className="bg-red-100 text-red-600 px-3 py-1.5 rounded-xl text-xs font-bold">Remove Image</button>}
           </div>
         </div>
 
         {/* Banner 3 */}
         <div className="bg-slate-50 p-4 rounded-2xl border space-y-3">
-          <h3 className="font-bold text-sm text-purple-900">Banner 3</h3>
-          <div><label className="text-xs font-bold text-slate-500 uppercase">Title Text</label><input type="text" value={b3Title} onChange={e => setB3Title(e.target.value)} placeholder="Fresh Desserts & Shakes" className={inpStyle + ' py-2 text-xs'} /></div>
-          <div><label className="text-xs font-bold text-slate-500 uppercase">Description Text</label><input type="text" value={b3Desc} onChange={e => setB3Desc(e.target.value)} placeholder="Sweet endings to make your day happier" className={inpStyle + ' py-2 text-xs'} /></div>
+          <p className="font-black text-purple-900 text-sm">Banner 3</p>
+          <div><label className="text-[10px] font-bold text-slate-500 uppercase">Title</label><input type="text" value={b3Title} onChange={e => setB3Title(e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
+          <div><label className="text-[10px] font-bold text-slate-500 uppercase">Description</label><input type="text" value={b3Desc} onChange={e => setB3Desc(e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
           <div className="flex items-center gap-3">
             <input type="file" accept="image/*" onChange={async e => { if(e.target.files[0]) setB3Img(await readImg(e.target.files[0])); }} className="w-full text-xs" />
-            {b3Img && <button onClick={() => setB3Img('')} className="text-red-500 text-xs font-bold shrink-0">Remove Img</button>}
+            {b3Img && <button type="button" onClick={() => setB3Img('')} className="bg-red-100 text-red-600 px-3 py-1.5 rounded-xl text-xs font-bold">Remove Image</button>}
           </div>
         </div>
 
-        <button onClick={saveBanners} className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-3 rounded-xl mt-2">Save Banners</button>
+        <button onClick={saveBanners} className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-3.5 rounded-xl mt-2">Save Banners & Text</button>
       </div>
     </div>
   );
