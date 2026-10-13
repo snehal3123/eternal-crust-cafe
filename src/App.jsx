@@ -60,7 +60,7 @@ const readImg = (f) => new Promise((res) => {
 
 const initialMenu = [
   { id: 'p1', category: 'Pizza', name: 'Small Pizza', price: 139, stock: true, ingredients: [{ name: 'Pizza Base', cost: 30 }, { name: 'Cheese', cost: 40 }] },
-  { id: 'p2', category: 'Pizza', name: 'Classic Margarita Pizza', price: 149, v: [['Regular', 149], ['Large', 189]], stock: true, ingredients: [{ name: 'Base', cost: 35 }, { name: 'Mozzarella', cost: 50 }] }
+  { id: 'p2', category: 'Pizza', name: 'Classic Margarita Pizza', price: 149, v: [{name: 'Regular', price: 149}, {name: 'Large', price: 189}], stock: true, ingredients: [{ name: 'Base', cost: 35 }, { name: 'Mozzarella', cost: 50 }] }
 ];
 
 const initialStock = [{ id: 'i1', name: 'Pizza Base', qty: 40, price: 500, min: 10 }, { id: 'i2', name: 'Burger Buns', qty: 30, price: 300, min: 10 }];
@@ -123,7 +123,16 @@ export default function App() {
       if (snap.empty) {
         initialMenu.forEach(item => setDoc(doc(db, 'eternal_menu_v2', item.id), item));
       } else {
-        setMenuItems(snap.docs.map(d => ({ ...d.data(), id: d.id })));
+        const docs = snap.docs.map(d => {
+          const data = d.data();
+          // Convert stored variants object format back to [name, price] tuples for frontend compatibility
+          let convertedV = null;
+          if (data.v && Array.isArray(data.v)) {
+            convertedV = data.v.map(x => Array.isArray(x) ? x : [x.name, x.price]);
+          }
+          return { ...data, id: d.id, v: convertedV };
+        });
+        setMenuItems(docs);
       }
     });
 
@@ -193,7 +202,6 @@ export default function App() {
     await deleteDoc(doc(db, 'orders', o.id));
     playSfx('save');
 
-    // Send WhatsApp Bill matching exact requested format in fixed tabular code block
     if (o.customerPhone) {
       const dObj = new Date(completedAt);
       const dateStr = dObj.toLocaleDateString();
@@ -202,7 +210,7 @@ export default function App() {
       let itemsRows = o.items.map(i => {
         const itemLine = `${i.name} (x${i.qty})`;
         const amtLine = `₹${i.price * i.qty}`;
-        return `${itemLine.padEnd(26, ' ')}${amtLine}`;
+        return `${itemLine.padEnd(22, ' ')}${amtLine}`;
       }).join('\n');
 
       const discountLine = o.discount ? `Discount Applied : -₹${o.discount}\n` : '';
@@ -592,6 +600,22 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
   );
 }
 
+function PaymentTimer({ order, upiId }) {
+  const [tl, setTl] = useState(180);
+  useEffect(() => {
+    window.location.href = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(CAFE_NAME)}&am=${order.total}.00&cu=INR&tn=${encodeURIComponent('Table ' + order.table)}`;
+    const t = setInterval(() => setTl(p => p <= 1 ? (clearInterval(t), 0) : p - 1), 1000); return () => clearInterval(t);
+  }, [order, upiId]);
+  return (
+    <div className="bg-white p-6 rounded-3xl shadow-lg border-2 border-indigo-100 text-center mb-5 relative overflow-hidden">
+      <div className="absolute top-0 left-0 right-0 h-1 bg-indigo-100"><div className="h-full bg-indigo-600 transition-all duration-1000 linear" style={{ width: `${(tl / 180) * 100}%` }}></div></div>
+      <Clock className="w-10 h-10 text-indigo-600 mx-auto mb-3 animate-pulse"/><h3 className="text-xl font-black text-slate-800 mb-1">Verify Payment in App</h3><p className="text-sm text-slate-500 font-medium mb-4">Please complete the payment on your UPI app. The restaurant is waiting to confirm.</p>
+      <div className="text-5xl font-black text-indigo-700 tabular-nums mb-4 drop-shadow-md">{String(Math.floor(tl / 60)).padStart(2, '0')}:{String(tl % 60).padStart(2, '0')}</div>
+      {tl === 0 && <p className="text-red-500 font-bold text-sm bg-red-50 py-2 rounded-lg">Time expired. Please try ordering again or pay by cash.</p>}
+    </div>
+  );
+}
+
 /* ---------------- FULL ADMIN DASHBOARD ---------------- */
 function AdminDashboard(p) {
   const [tab, setTab] = useState('orders');
@@ -864,7 +888,7 @@ function MenuForm({ item, categories, descriptions, onSave, onClose }) {
       desc: desc.trim(),
       img,
       price: hasVariants && variantList.length > 0 ? variantList[0][1] : Number(price),
-      v: hasVariants && variantList.length > 0 ? variantList : null,
+      v: hasVariants && variantList.length > 0 ? variantList.map(v => ({ name: v[0], price: v[1] })) : null,
       ingredients: cleanIngredients,
       stock: item ? item.stock : true
     });
@@ -890,10 +914,10 @@ function MenuForm({ item, categories, descriptions, onSave, onClose }) {
         </div>
 
         {hasVariants && (
-          <div className="bg-slate-50 p-3 rounded-2xl border space-y-3">
+          <div className="bg-slate-50 p-3.5 rounded-2xl border space-y-3">
             <label className="text-xs font-black text-slate-700 uppercase">Add Size & Price</label>
-            <div className="flex items-center gap-2">
-              <select value={variantSize} onChange={e => setVariantSize(e.target.value)} className="border rounded-xl px-2 py-2 text-xs font-bold bg-white w-28">
+            <div className="flex flex-wrap items-center gap-2">
+              <select value={variantSize} onChange={e => setVariantSize(e.target.value)} className="border rounded-xl px-3 py-2 text-xs font-bold bg-white w-28">
                 <option value="Small">Small</option>
                 <option value="Medium">Medium</option>
                 <option value="Large">Large</option>
@@ -901,9 +925,8 @@ function MenuForm({ item, categories, descriptions, onSave, onClose }) {
                 <option value="Full">Full</option>
                 <option value="Regular">Regular</option>
               </select>
-              <input type="number" value={variantPrice} onChange={e => setVariantPrice(e.target.value)} placeholder="Price ₹" className="flex-1 border rounded-xl px-3 py-2 text-xs font-bold bg-white" />
-              {/* Perfectly Inside Card Add Button */}
-              <button type="button" onClick={addVariantItem} className="bg-purple-700 text-white px-4 py-2 rounded-xl text-xs font-bold shrink-0">Add</button>
+              <input type="number" value={variantPrice} onChange={e => setVariantPrice(e.target.value)} placeholder="Price ₹" className="flex-1 min-w-[90px] border rounded-xl px-3 py-2 text-xs font-bold bg-white" />
+              <button type="button" onClick={addVariantItem} className="bg-purple-700 hover:bg-purple-800 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md">Add</button>
             </div>
             <div className="flex flex-wrap gap-1.5 mt-2">
               {variantList.map((v, i) => (
@@ -1232,9 +1255,9 @@ function SettingsTab({ cafeConfig, db }) {
       <div className="bg-white rounded-3xl border border-slate-200 p-8">
         <h2 className="text-2xl font-black text-slate-900 mb-4">Manage 3 Banner Images</h2>
         <div className="space-y-4">
-          <div><label className="text-xs font-bold text-slate-500 uppercase">Banner 1 Item</label><input type="file" accept="image/*" onChange={async e => { if(e.target.files[0]) setB1(await readImg(e.target.files[0])); }} className="w-full text-xs mt-1" /></div>
-          <div><label className="text-xs font-bold text-slate-500 uppercase">Banner 2 Item</label><input type="file" accept="image/*" onChange={async e => { if(e.target.files[0]) setB2(await readImg(e.target.files[0])); }} className="w-full text-xs mt-1" /></div>
-          <div><label className="text-xs font-bold text-slate-500 uppercase">Banner 3 Item</label><input type="file" accept="image/*" onChange={async e => { if(e.target.files[0]) setB3(await readImg(e.target.files[0])); }} className="w-full text-xs mt-1" /></div>
+          <div><label className="text-xs font-bold text-slate-500 uppercase">Banner 1 Image</label><input type="file" accept="image/*" onChange={async e => { if(e.target.files[0]) setB1(await readImg(e.target.files[0])); }} className="w-full text-xs mt-1" /></div>
+          <div><label className="text-xs font-bold text-slate-500 uppercase">Banner 2 Image</label><input type="file" accept="image/*" onChange={async e => { if(e.target.files[0]) setB2(await readImg(e.target.files[0])); }} className="w-full text-xs mt-1" /></div>
+          <div><label className="text-xs font-bold text-slate-500 uppercase">Banner 3 Image</label><input type="file" accept="image/*" onChange={async e => { if(e.target.files[0]) setB3(await readImg(e.target.files[0])); }} className="w-full text-xs mt-1" /></div>
           <button onClick={saveBanners} className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-3 rounded-xl mt-2">Save Banners</button>
         </div>
       </div>
