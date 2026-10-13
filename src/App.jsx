@@ -49,7 +49,6 @@ const speak = (txt) => {
 };
 
 /* ---------------- CONFIG & DATA ---------------- */
-const UPI_ID = 'snehaltitkare58-2@okicici';
 const CAFE_NAME = 'ETERNAL CRUST CAFÉ';
 const CAFE_ADDRESS = 'Shop no 20, Sai Arcade, Neetaji Chowk, Ulhasnagar';
 
@@ -105,7 +104,7 @@ export default function App() {
   const [stockInv, setStockInv] = useState([]);
   const [iceInv, setIceInv] = useState([]);
   const [coupons, setCoupons] = useState([]);
-  const [cafeConfig, setCafeConfig] = useState({ logo: '', banners: [] });
+  const [cafeConfig, setCafeConfig] = useState({ logo: '', upiId: 'snehaltitkare58-2@okicici', banners: [] });
 
   useEffect(() => {
     const checkReminder = () => {
@@ -194,13 +193,20 @@ export default function App() {
     await deleteDoc(doc(db, 'orders', o.id));
     playSfx('save');
 
+    // Send WhatsApp Bill matching exact requested format
     if (o.customerPhone) {
       const dObj = new Date(completedAt);
       const dateStr = dObj.toLocaleDateString();
       const timeStr = dObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      const itemsText = o.items.map(i => `${i.name} | ${i.qty} | ₹${i.price * i.qty}`).join('\n');
-      const discountText = o.discount ? `Discount Applied: -₹${o.discount}\n` : '';
-      const msg = `*${CAFE_NAME}*\n${CAFE_ADDRESS}\n--------------------\n*Cash Memo*\nDate : ${dateStr} ${timeStr}   Bill No.: #${o.id}\nT.No.: ${o.table}   Cust.: ${o.customerName || 'Guest'}\n--------------------\n*Particulars | Qty | Amount*\n${itemsText}\n--------------------\n${discountText}*Total : ₹${o.total}*\n--------------------\n    Thank You      Visit Again ✨`;
+      
+      const itemsFormatted = o.items.map(i => {
+        const pName = i.name.padEnd(22, ' ');
+        const qty = String(i.qty).padEnd(6, ' ');
+        const amt = `₹${i.price * i.qty}`;
+        return `${pName}${qty}${amt}`;
+      }).join('\n');
+
+      const msg = `*${CAFE_NAME}*\n${CAFE_ADDRESS}\n--------------------\n*Cash Memo*\nDate : ${dateStr} ${timeStr}   Bill No: #${o.id}\nT.No : ${o.table}                                  Cust : ${o.customerName || 'Guest'}\n--------------------\n*Particulars                          Qty              Amount*\n${itemsFormatted}\n--------------------\n*Total : ₹${o.total}*\n--------------------\n    Thank You      Visit Again ✨`;
       const wpUrl = `https://wa.me/91${o.customerPhone}?text=${encodeURIComponent(msg)}`;
       window.open(wpUrl, '_blank');
     }
@@ -365,7 +371,7 @@ function AdminLoginModal({ onClose, onSuccess }) {
   );
 }
 
-/* ---------------- CUSTOMER VIEW WITH PIZZA HUT STYLE BANNER & CATEGORY IMAGES ---------------- */
+/* ---------------- CUSTOMER VIEW ---------------- */
 function CustomerView({ tableNumber, customerName, customerPhone, menuItems, activeOrders, coupons, cafeConfig, onPlaceOrder, onExit }) {
   const [cart, setCart] = useState([]); 
   const [checkout, setCheckout] = useState(false);
@@ -443,7 +449,7 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
             <div className="bg-purple-950/50 px-4 py-1.5 rounded-full border border-purple-700/50"><h1 className="text-sm font-black tracking-widest uppercase text-purple-200">Table {tableNumber} | {customerName || 'Guest'}</h1></div>
             <div className="w-9 h-9" />
           </div>
-          {/* Categories with Image Icons */}
+
           <div className="flex overflow-x-auto gap-3 pb-2 pt-1 scrollbar-hide">
             <button onClick={() => { playSfx('click'); setActiveCat('All'); }} className="flex flex-col items-center shrink-0 group">
               <div className={`w-14 h-14 rounded-2xl flex items-center justify-center border-2 transition-all ${activeCat === 'All' ? 'bg-white text-purple-900 border-white shadow-lg scale-105' : 'bg-purple-800/80 text-purple-200 border-purple-700'}`}>
@@ -466,7 +472,6 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 bg-slate-100">
-          {/* Banner Layout */}
           <div className={`w-full rounded-3xl ${banners[bannerIdx].img ? 'bg-slate-900' : 'bg-gradient-to-r ' + banners[bannerIdx].bg} text-white p-5 mb-5 shadow-lg relative overflow-hidden transition-all duration-700 min-h-[150px] flex flex-col justify-end`}>
             {banners[bannerIdx].img && <img src={banners[bannerIdx].img} alt="" className="absolute inset-0 w-full h-full object-cover opacity-60" />}
             <div className="relative z-10">
@@ -478,7 +483,7 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
             </div>
           </div>
 
-          {status === 'Verifying' && <PaymentTimer order={tableOrder} />}
+          {status === 'Verifying' && <PaymentTimer order={tableOrder} upiId={cafeConfig.upiId} />}
           {status === 'Pending' && <div className="bg-purple-100 border-l-4 border-purple-600 text-purple-900 p-4 rounded-2xl mb-4 shadow-sm"><p className="font-black text-lg">Order Placed!</p><p className="text-sm opacity-80">Waiting for restaurant confirmation.</p></div>}
           {status === 'Preparing' && <div className="bg-blue-100 border-l-4 border-blue-600 text-blue-900 p-4 rounded-2xl mb-4 shadow-sm"><p className="font-black text-lg">Preparing Order 👨‍🍳</p><p className="text-sm opacity-80">Kitchen is cooking your delicious meal.</p></div>}
           {status === 'Ready' && <div className="bg-green-100 border-l-4 border-green-600 text-green-900 p-4 rounded-2xl mb-4 shadow-sm animate-bounce"><p className="font-black text-xl">Your Order is Ready! 🎉</p><p className="text-sm opacity-80">Please pick it up from the counter.</p></div>}
@@ -497,7 +502,6 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
                     <h3 className="font-black text-slate-900 leading-tight">{it.name}</h3>
                     {it.desc && <p className="text-[11px] text-slate-500 font-medium leading-tight mt-0.5">{it.desc}</p>}
                     
-                    {/* Size Variants Display */}
                     {it.v && it.v.length > 0 && (
                       <div className="flex flex-wrap gap-1.5 mt-2">
                         {it.v.map((x, i) => (
@@ -541,7 +545,6 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
                 <div className="space-y-3 max-h-36 overflow-y-auto pr-2 mt-4 pt-3 border-t border-purple-200">{cart.map(c => <div key={c.key} className="flex items-center justify-between text-xs text-slate-700 font-bold border-b border-purple-100/50 pb-1.5"><span className="flex-1">{c.name}</span><div className="flex items-center gap-1.5 mx-2"><button onClick={() => chg(c.key, -1)} className="px-1.5 bg-white rounded shadow-sm">-</button><span>{c.qty}</span><button onClick={() => chg(c.key, 1)} className="px-1.5 bg-white rounded shadow-sm">+</button></div><span className="w-10 text-right">₹{c.price * c.qty}</span></div>)}</div>
               </div>
 
-              {/* Coupons Section */}
               <div className="mb-5">
                 <p className="font-bold text-slate-500 text-xs mb-2 uppercase tracking-widest flex items-center gap-1"><Tag className="w-3.5 h-3.5"/> Available Coupons / Offers</p>
                 {coupons.length > 0 ? (
@@ -574,12 +577,12 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
   );
 }
 
-function PaymentTimer({ order }) {
+function PaymentTimer({ order, upiId }) {
   const [tl, setTl] = useState(180);
   useEffect(() => {
-    window.location.href = `upi://pay?pa=${UPI_ID}&pn=${encodeURIComponent(CAFE_NAME)}&am=${order.total}.00&cu=INR&tn=${encodeURIComponent('Table ' + order.table)}`;
+    window.location.href = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(CAFE_NAME)}&am=${order.total}.00&cu=INR&tn=${encodeURIComponent('Table ' + order.table)}`;
     const t = setInterval(() => setTl(p => p <= 1 ? (clearInterval(t), 0) : p - 1), 1000); return () => clearInterval(t);
-  }, [order]);
+  }, [order, upiId]);
   return (
     <div className="bg-white p-6 rounded-3xl shadow-lg border-2 border-indigo-100 text-center mb-5 relative overflow-hidden">
       <div className="absolute top-0 left-0 right-0 h-1 bg-indigo-100"><div className="h-full bg-indigo-600 transition-all duration-1000 linear" style={{ width: `${(tl / 180) * 100}%` }}></div></div>
@@ -752,7 +755,7 @@ function CouponsTab({ coupons, db }) {
   );
 }
 
-/* ---------------- MENU CRUD TAB WITH FIXED SAVE & VARIANTS ---------------- */
+/* ---------------- MENU CRUD TAB ---------------- */
 function MenuTab({ menuItems, db }) {
   const [edit, setEdit] = useState(undefined);
   const [search, setSearch] = useState('');
@@ -870,7 +873,7 @@ function MenuForm({ item, categories, descriptions, onSave, onClose }) {
 
   return (
     <Modal title={item?.id ? 'Edit Menu Item' : 'New Menu Item'} onClose={onClose}>
-      <form onSubmit={submit} className="space-y-4 pb-16">
+      <form onSubmit={submit} className="space-y-4 max-h-[75vh] overflow-y-auto pr-2">
         <div><label className="text-xs font-bold text-slate-500 uppercase">Item Name</label><input value={name} onChange={e => setName(e.target.value)} className={inpStyle} required /></div>
         
         <div className="grid grid-cols-2 gap-3">
@@ -890,7 +893,7 @@ function MenuForm({ item, categories, descriptions, onSave, onClose }) {
         {hasVariants && (
           <div className="bg-slate-50 p-3 rounded-2xl border space-y-3">
             <label className="text-xs font-black text-slate-700 uppercase">Add Size & Price</label>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
               <select value={variantSize} onChange={e => setVariantSize(e.target.value)} className="border rounded-xl px-3 py-2 text-xs font-bold bg-white">
                 <option value="Small">Small</option>
                 <option value="Medium">Medium</option>
@@ -937,10 +940,7 @@ function MenuForm({ item, categories, descriptions, onSave, onClose }) {
           <div className="flex gap-3 items-center mt-1"><div className="w-14 h-14 bg-slate-100 rounded-xl overflow-hidden flex justify-center items-center">{img ? <img src={img} className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-slate-300" />}</div><button type="button" onClick={() => { playSfx('click'); fileRef.current.click(); }} className="bg-purple-100 text-purple-800 font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-1.5"><Upload className="w-3.5 h-3.5"/> Upload</button></div>
         </div>
 
-        {/* Fixed Save Button inside Card */}
-        <div className="pt-2">
-          <button type="submit" className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-4 rounded-xl shadow-lg">Save Menu Item</button>
-        </div>
+        <button type="submit" className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-4 rounded-xl mt-4">Save Menu Item</button>
       </form>
     </Modal>
   );
@@ -1026,7 +1026,7 @@ function InvSection({ title, icon, items, colName, db, prefix, search }) {
       </table></div>
       {edit !== undefined && (
         <Modal title={edit?.id ? 'Edit Item' : 'Add Item'} onClose={() => setEdit(undefined)}>
-          <form onSubmit={save} className="space-y-3 pb-10">
+          <form onSubmit={save} className="space-y-3">
             <div>
               <label className="text-xs font-bold text-slate-500 uppercase">Name</label>
               <input name="name" list={`name-list-${prefix}`} defaultValue={edit?.name} className={inpStyle} required />
@@ -1176,16 +1176,25 @@ function HistoryTab({ history, stockInv, iceInv, menuItems, db }) {
   );
 }
 
-/* ---------------- SETTINGS TAB (BANNER UPLOAD) ---------------- */
+/* ---------------- SETTINGS TAB WITH UPI & BANNERS ---------------- */
 function SettingsTab({ cafeConfig, db }) {
-  const logoRef = useRef(null);
+  const fileRef = useRef(null);
+  const [upi, setUpi] = useState(cafeConfig.upiId || 'snehaltitkare58-2@okicici');
   const [b1, setB1] = useState(cafeConfig.banners?.[0]?.img || '');
   const [b2, setB2] = useState(cafeConfig.banners?.[1]?.img || '');
   const [b3, setB3] = useState(cafeConfig.banners?.[2]?.img || '');
+  const logoRef = useRef(null);
 
   const saveLogo = async (url) => {
     playSfx('save');
     await setDoc(doc(db, 'settings', 'config'), { ...cafeConfig, logo: url });
+  };
+
+  const saveUpi = async (e) => {
+    e.preventDefault();
+    playSfx('save');
+    await setDoc(doc(db, 'settings', 'config'), { ...cafeConfig, upiId: upi.trim() });
+    alert('UPI ID updated successfully!');
   };
 
   const saveBanners = async () => {
@@ -1201,6 +1210,14 @@ function SettingsTab({ cafeConfig, db }) {
 
   return (
     <div className="space-y-6 max-w-xl">
+      <div className="bg-white rounded-3xl border border-slate-200 p-8">
+        <h2 className="text-2xl font-black text-slate-900 mb-6">Payment Settings (UPI ID)</h2>
+        <form onSubmit={saveUpi} className="space-y-4">
+          <div><label className="text-xs font-bold text-slate-500 uppercase">Cafe UPI ID</label><input type="text" value={upi} onChange={e => setUpi(e.target.value)} placeholder="e.g. yourname@okicici" className={inpStyle} required /></div>
+          <button type="submit" className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-3 rounded-xl">Save UPI ID</button>
+        </form>
+      </div>
+
       <div className="bg-white rounded-3xl border border-slate-200 p-8">
         <h2 className="text-2xl font-black text-slate-900 mb-6">Café Logo</h2>
         <div className="flex flex-col items-center bg-slate-50 p-6 rounded-3xl border-2 border-dashed border-slate-200">
