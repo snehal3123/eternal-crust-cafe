@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Coffee, Utensils, Plus, Minus, ChevronLeft, LayoutDashboard, LogOut,
   CheckCircle, Clock, ChefHat, Bell, Edit, Trash2, ToggleLeft, ToggleRight, QrCode, Printer,
-  CreditCard, Banknote, X, History, Download, Image as ImageIcon, Package, AlertTriangle, Upload, IceCream, Lock, Eye, EyeOff, Settings, Volume2, VolumeX, Mic, Search, MessageSquare, Tag, Image as ImageIconLucide
+  CreditCard, Banknote, X, History, Download, Image as ImageIcon, Package, AlertTriangle, Upload, IceCream, Lock, Eye, EyeOff, Settings, Volume2, VolumeX, Mic, Search, MessageSquare, Tag
 } from 'lucide-react';
 
 /* ---------------- AUDIO & VOICE ENGINE ---------------- */
@@ -123,15 +123,7 @@ export default function App() {
       if (snap.empty) {
         initialMenu.forEach(item => setDoc(doc(db, 'eternal_menu_v2', item.id), item));
       } else {
-        const docs = snap.docs.map(d => {
-          const data = d.data();
-          let convertedV = null;
-          if (data.v && Array.isArray(data.v)) {
-            convertedV = data.v.map(x => Array.isArray(x) ? x : [x.name, x.price]);
-          }
-          return { ...data, id: d.id, v: convertedV };
-        });
-        setMenuItems(docs);
+        setMenuItems(snap.docs.map(d => ({ ...d.data(), id: d.id })));
       }
     });
 
@@ -393,7 +385,7 @@ function AdminLoginModal({ onClose, onSuccess }) {
   );
 }
 
-/* ---------------- CUSTOMER VIEW WITH SEARCH & AUTO BANNER ---------------- */
+/* ---------------- CUSTOMER VIEW WITH SEARCH BAR & CUSTOMIZABLE BANNERS ---------------- */
 function CustomerView({ tableNumber, customerName, customerPhone, menuItems, activeOrders, coupons, cafeConfig, onPlaceOrder, onExit }) {
   const [cart, setCart] = useState([]); 
   const [checkout, setCheckout] = useState(false);
@@ -410,14 +402,11 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
   ];
 
   const rawBanners = (cafeConfig.banners && cafeConfig.banners.length > 0) ? cafeConfig.banners : defaultBanners;
-  const banners = rawBanners.map((b, idx) => ({
-    title: b.title || defaultBanners[idx]?.title || "Eternal Crust Café",
-    desc: b.desc || defaultBanners[idx]?.desc || "Good food travels better.",
-    bg: b.bg || defaultBanners[idx]?.bg || "from-purple-900 to-indigo-900",
-    img: b.img || ""
-  }));
+  // Filter out banners that have neither an image nor text
+  const banners = rawBanners.filter(b => b.img || b.title || b.desc);
 
   useEffect(() => {
+    if (banners.length <= 1) return;
     const t = setInterval(() => setBannerIdx(p => (p + 1) % banners.length), 4000);
     return () => clearInterval(t);
   }, [banners.length]);
@@ -468,7 +457,7 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
   const displayedMenu = useMemo(() => {
     let list = activeCat === 'All' ? menuItems : menuItems.filter(i => i.category === activeCat);
     if (searchQuery.trim()) {
-      list = menuItems.filter(i => i.name.toLowerCase().includes(searchQuery.toLowerCase()) || i.category.toLowerCase().includes(searchQuery.toLowerCase()));
+      list = list.filter(i => i.name.toLowerCase().includes(searchQuery.toLowerCase()) || i.category.toLowerCase().includes(searchQuery.toLowerCase()));
     }
     return list;
   }, [menuItems, activeCat, searchQuery]);
@@ -485,10 +474,10 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
             <div className="w-9 h-9" />
           </div>
 
-          {/* Search Bar */}
+          {/* Search Bar for Customer Side */}
           <div className="relative mb-3">
-            <Search className="absolute left-3 top-3 w-4 h-4 text-purple-300"/>
-            <input type="text" placeholder="Search your favorite food..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-purple-950/60 border border-purple-700/60 rounded-xl pl-9 pr-3 py-2 text-xs font-bold text-white placeholder-purple-300 outline-none focus:border-white" />
+            <Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
+            <input type="text" placeholder="Search food items..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-white/90 border-0 rounded-xl pl-9 pr-3 py-2 text-xs font-bold text-slate-900 outline-none" />
           </div>
 
           <div className="flex overflow-x-auto gap-3 pb-2 pt-1 scrollbar-hide">
@@ -513,16 +502,21 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 bg-slate-100">
-          <div className={`w-full rounded-3xl ${banners[bannerIdx].img ? 'bg-slate-900' : 'bg-gradient-to-r ' + banners[bannerIdx].bg} text-white p-5 mb-5 shadow-lg relative overflow-hidden transition-all duration-700 min-h-[150px] flex flex-col justify-end`}>
-            {banners[bannerIdx].img && <img src={banners[bannerIdx].img} alt="" className="absolute inset-0 w-full h-full object-cover opacity-60" />}
-            <div className="relative z-10">
-              <h2 className="text-xl font-black mb-1 drop-shadow-md">{banners[bannerIdx].title}</h2>
-              <p className="text-xs text-purple-100 font-medium mb-3 drop-shadow">{banners[bannerIdx].desc}</p>
-              <div className="flex gap-1.5">
-                {banners.map((_, i) => <div key={i} className={`h-1.5 rounded-full transition-all ${bannerIdx === i ? 'w-6 bg-white' : 'w-1.5 bg-white/40'}`}></div>)}
+          {/* Banner rendering ONLY if text or image exists */}
+          {banners.length > 0 && banners[bannerIdx] && (
+            <div className={`w-full rounded-3xl ${banners[bannerIdx].img ? 'bg-slate-900' : 'bg-gradient-to-r ' + (banners[bannerIdx].bg || 'from-purple-900 to-indigo-900')} text-white p-5 mb-5 shadow-lg relative overflow-hidden transition-all duration-700 min-h-[140px] flex flex-col justify-end`}>
+              {banners[bannerIdx].img && <img src={banners[bannerIdx].img} alt="" className="absolute inset-0 w-full h-full object-cover opacity-60" />}
+              <div className="relative z-10">
+                {banners[bannerIdx].title && <h2 className="text-xl font-black mb-1 drop-shadow-md">{banners[bannerIdx].title}</h2>}
+                {banners[bannerIdx].desc && <p className="text-xs text-purple-100 font-medium mb-3 drop-shadow">{banners[bannerIdx].desc}</p>}
+                {banners.length > 1 && (
+                  <div className="flex gap-1.5">
+                    {banners.map((_, i) => <div key={i} className={`h-1.5 rounded-full transition-all ${bannerIdx === i ? 'w-6 bg-white' : 'w-1.5 bg-white/40'}`}></div>)}
+                  </div>
+                )}
               </div>
             </div>
-          </div>
+          )}
 
           {status === 'Verifying' && <PaymentTimer order={tableOrder} upiId={cafeConfig.upiId} />}
           {status === 'Pending' && <div className="bg-purple-100 border-l-4 border-purple-600 text-purple-900 p-4 rounded-2xl mb-4 shadow-sm"><p className="font-black text-lg">Order Placed!</p><p className="text-sm opacity-80">Waiting for restaurant confirmation.</p></div>}
@@ -796,7 +790,7 @@ function CouponsTab({ coupons, db }) {
   );
 }
 
-/* ---------------- MENU CRUD TAB ---------------- */
+/* ---------------- MENU CRUD TAB WITH FIXED MODAL BUTTONS ---------------- */
 function MenuTab({ menuItems, db }) {
   const [edit, setEdit] = useState(undefined);
   const [search, setSearch] = useState('');
@@ -914,7 +908,7 @@ function MenuForm({ item, categories, descriptions, onSave, onClose }) {
 
   return (
     <Modal title={item?.id ? 'Edit Menu Item' : 'New Menu Item'} onClose={onClose}>
-      <form onSubmit={submit} className="space-y-4 max-h-[75vh] overflow-y-auto pr-2">
+      <form onSubmit={submit} className="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
         <div><label className="text-xs font-bold text-slate-500 uppercase">Item Name</label><input value={name} onChange={e => setName(e.target.value)} className={inpStyle} required /></div>
         
         <div className="grid grid-cols-2 gap-3">
@@ -934,8 +928,8 @@ function MenuForm({ item, categories, descriptions, onSave, onClose }) {
         {hasVariants && (
           <div className="bg-slate-50 p-3.5 rounded-2xl border space-y-3">
             <label className="text-xs font-black text-slate-700 uppercase">Add Size & Price</label>
-            <div className="flex items-center gap-2">
-              <select value={variantSize} onChange={e => setVariantSize(e.target.value)} className="border rounded-xl px-2 py-2 text-xs font-bold bg-white w-28">
+            <div className="flex flex-wrap items-center gap-2">
+              <select value={variantSize} onChange={e => setVariantSize(e.target.value)} className="border rounded-xl px-3 py-2 text-xs font-bold bg-white w-28">
                 <option value="Small">Small</option>
                 <option value="Medium">Medium</option>
                 <option value="Large">Large</option>
@@ -943,8 +937,8 @@ function MenuForm({ item, categories, descriptions, onSave, onClose }) {
                 <option value="Full">Full</option>
                 <option value="Regular">Regular</option>
               </select>
-              <input type="number" value={variantPrice} onChange={e => setVariantPrice(e.target.value)} placeholder="Price ₹" className="flex-1 border rounded-xl px-3 py-2 text-xs font-bold bg-white" />
-              <button type="button" onClick={addVariantItem} className="bg-purple-700 hover:bg-purple-800 text-white px-4 py-2 rounded-xl text-xs font-bold shrink-0 shadow-md">Add</button>
+              <input type="number" value={variantPrice} onChange={e => setVariantPrice(e.target.value)} placeholder="Price ₹" className="flex-1 min-w-[80px] border rounded-xl px-3 py-2 text-xs font-bold bg-white" />
+              <button type="button" onClick={addVariantItem} className="bg-purple-700 hover:bg-purple-800 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md shrink-0">Add</button>
             </div>
             <div className="flex flex-wrap gap-1.5 mt-2">
               {variantList.map((v, i) => (
@@ -1217,15 +1211,22 @@ function HistoryTab({ history, stockInv, iceInv, menuItems, db }) {
   );
 }
 
-/* ---------------- SETTINGS TAB WITH BANNER TEXT & IMAGE ---------------- */
+/* ---------------- SETTINGS TAB ---------------- */
 function SettingsTab({ cafeConfig, db }) {
   const fileRef = useRef(null);
   const [upi, setUpi] = useState(cafeConfig.upiId || 'snehaltitkare58-2@okicici');
-  const [banners, setBanners] = useState(cafeConfig.banners || [
-    { title: "More Cheese. More Happiness.", desc: "Hot, cheesy and baked with love, just for you.", bg: "from-purple-900 to-indigo-900", img: "" },
-    { title: "Exclusive Combos", desc: "Save up to 30% OFF on selected family combos!", bg: "from-indigo-900 to-purple-950", img: "" },
-    { title: "Fresh Desserts & Shakes", desc: "Sweet endings to make your day happier.", bg: "from-purple-950 to-purple-900", img: "" }
-  ]);
+  const [b1Img, setB1Img] = useState(cafeConfig.banners?.[0]?.img || '');
+  const [b1Title, setB1Title] = useState(cafeConfig.banners?.[0]?.title || '');
+  const [b1Desc, setB1Desc] = useState(cafeConfig.banners?.[0]?.desc || '');
+
+  const [b2Img, setB2Img] = useState(cafeConfig.banners?.[1]?.img || '');
+  const [b2Title, setB2Title] = useState(cafeConfig.banners?.[1]?.title || '');
+  const [b2Desc, setB2Desc] = useState(cafeConfig.banners?.[1]?.desc || '');
+
+  const [b3Img, setB3Img] = useState(cafeConfig.banners?.[2]?.img || '');
+  const [b3Title, setB3Title] = useState(cafeConfig.banners?.[2]?.title || '');
+  const [b3Desc, setB3Desc] = useState(cafeConfig.banners?.[2]?.desc || '');
+
   const logoRef = useRef(null);
 
   const saveLogo = async (url) => {
@@ -1240,20 +1241,13 @@ function SettingsTab({ cafeConfig, db }) {
     alert('UPI ID updated successfully!');
   };
 
-  const updateBannerField = (index, field, val) => {
-    const updated = [...banners];
-    updated[index][field] = val;
-    setBanners(updated);
-  };
-
-  const removeBannerImg = (index) => {
-    const updated = [...banners];
-    updated[index].img = "";
-    setBanners(updated);
-  };
-
-  const saveBannersToDb = async () => {
+  const saveBanners = async () => {
     playSfx('save');
+    const banners = [
+      { title: b1Title, desc: b1Desc, bg: "from-purple-900 to-indigo-900", img: b1Img },
+      { title: b2Title, desc: b2Desc, bg: "from-indigo-900 to-purple-950", img: b2Img },
+      { title: b3Title, desc: b3Desc, bg: "from-purple-950 to-purple-900", img: b3Img }
+    ];
     await setDoc(doc(db, 'settings', 'config'), { ...cafeConfig, banners });
     alert('Banners updated successfully!');
   };
@@ -1279,28 +1273,43 @@ function SettingsTab({ cafeConfig, db }) {
         </div>
       </div>
 
-      <div className="bg-white rounded-3xl border border-slate-200 p-8">
-        <h2 className="text-2xl font-black text-slate-900 mb-6">Manage Banner Sliders (Text & Image)</h2>
-        <div className="space-y-6">
-          {banners.map((b, idx) => (
-            <div key={idx} className="p-4 bg-slate-50 rounded-2xl border space-y-3">
-              <p className="font-black text-sm text-purple-900">Banner {idx + 1}</p>
-              <div><label className="text-[10px] font-bold text-slate-500 uppercase">Banner Title / Quote</label><input type="text" value={b.title} onChange={e => updateBannerField(idx, 'title', e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
-              <div><label className="text-[10px] font-bold text-slate-500 uppercase">Banner Description</label><input type="text" value={b.desc} onChange={e => updateBannerField(idx, 'desc', e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
-              
-              <div className="flex items-center gap-3">
-                <div className="w-16 h-12 bg-slate-200 rounded-lg overflow-hidden flex items-center justify-center shrink-0">
-                  {b.img ? <img src={b.img} className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-slate-400"/>}
-                </div>
-                <div className="flex-1 flex gap-2">
-                  <input type="file" accept="image/*" onChange={async e => { if(e.target.files[0]) updateBannerField(idx, 'img', await readImg(e.target.files[0])); }} className="text-xs" />
-                  {b.img && <button onClick={() => removeBannerImg(idx)} className="text-red-500 text-xs font-bold underline">Remove Img</button>}
-                </div>
-              </div>
-            </div>
-          ))}
-          <button onClick={saveBannersToDb} className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-3.5 rounded-xl">Save All Banners</button>
+      <div className="bg-white rounded-3xl border border-slate-200 p-8 space-y-6">
+        <h2 className="text-2xl font-black text-slate-900">Manage 3 Banners (Text & Image)</h2>
+        
+        {/* Banner 1 */}
+        <div className="bg-slate-50 p-4 rounded-2xl border space-y-3">
+          <h3 className="font-bold text-sm text-purple-900">Banner 1</h3>
+          <div><label className="text-xs font-bold text-slate-500 uppercase">Title Text</label><input type="text" value={b1Title} onChange={e => setB1Title(e.target.value)} placeholder="e.g. More Cheese. More Happiness." className={inpStyle + ' py-2 text-xs'} /></div>
+          <div><label className="text-xs font-bold text-slate-500 uppercase">Description Text</label><input type="text" value={b1Desc} onChange={e => setB1Desc(e.target.value)} placeholder="e.g. Hot, cheesy and baked with love" className={inpStyle + ' py-2 text-xs'} /></div>
+          <div className="flex items-center gap-3">
+            <input type="file" accept="image/*" onChange={async e => { if(e.target.files[0]) setB1Img(await readImg(e.target.files[0])); }} className="w-full text-xs" />
+            {b1Img && <button onClick={() => setB1Img('')} className="text-red-500 text-xs font-bold shrink-0">Remove Img</button>}
+          </div>
         </div>
+
+        {/* Banner 2 */}
+        <div className="bg-slate-50 p-4 rounded-2xl border space-y-3">
+          <h3 className="font-bold text-sm text-purple-900">Banner 2</h3>
+          <div><label className="text-xs font-bold text-slate-500 uppercase">Title Text</label><input type="text" value={b2Title} onChange={e => setB2Title(e.target.value)} placeholder="Exclusive Combos" className={inpStyle + ' py-2 text-xs'} /></div>
+          <div><label className="text-xs font-bold text-slate-500 uppercase">Description Text</label><input type="text" value={b2Desc} onChange={e => setB2Desc(e.target.value)} placeholder="Save up to 30% OFF" className={inpStyle + ' py-2 text-xs'} /></div>
+          <div className="flex items-center gap-3">
+            <input type="file" accept="image/*" onChange={async e => { if(e.target.files[0]) setB2Img(await readImg(e.target.files[0])); }} className="w-full text-xs" />
+            {b2Img && <button onClick={() => setB2Img('')} className="text-red-500 text-xs font-bold shrink-0">Remove Img</button>}
+          </div>
+        </div>
+
+        {/* Banner 3 */}
+        <div className="bg-slate-50 p-4 rounded-2xl border space-y-3">
+          <h3 className="font-bold text-sm text-purple-900">Banner 3</h3>
+          <div><label className="text-xs font-bold text-slate-500 uppercase">Title Text</label><input type="text" value={b3Title} onChange={e => setB3Title(e.target.value)} placeholder="Fresh Desserts & Shakes" className={inpStyle + ' py-2 text-xs'} /></div>
+          <div><label className="text-xs font-bold text-slate-500 uppercase">Description Text</label><input type="text" value={b3Desc} onChange={e => setB3Desc(e.target.value)} placeholder="Sweet endings to make your day happier" className={inpStyle + ' py-2 text-xs'} /></div>
+          <div className="flex items-center gap-3">
+            <input type="file" accept="image/*" onChange={async e => { if(e.target.files[0]) setB3Img(await readImg(e.target.files[0])); }} className="w-full text-xs" />
+            {b3Img && <button onClick={() => setB3Img('')} className="text-red-500 text-xs font-bold shrink-0">Remove Img</button>}
+          </div>
+        </div>
+
+        <button onClick={saveBanners} className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-3 rounded-xl mt-2">Save Banners</button>
       </div>
     </div>
   );
