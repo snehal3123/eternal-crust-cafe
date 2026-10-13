@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Coffee, Utensils, Plus, Minus, ChevronLeft, LayoutDashboard, LogOut,
   CheckCircle, Clock, ChefHat, Bell, Edit, Trash2, ToggleLeft, ToggleRight, QrCode, Printer,
-  CreditCard, Banknote, X, History, Download, Image as ImageIcon, Package, AlertTriangle, Upload, IceCream, Lock, Eye, EyeOff, Settings, Volume2, VolumeX, Mic, Search, MessageSquare, Tag
+  CreditCard, Banknote, X, History, Download, Image as ImageIcon, Package, AlertTriangle, Upload, IceCream, Lock, Eye, EyeOff, Settings, Volume2, VolumeX, Mic, Search, MessageSquare, Tag, Image as ImageIconLucide
 } from 'lucide-react';
 
 /* ---------------- AUDIO & VOICE ENGINE ---------------- */
@@ -60,7 +60,7 @@ const readImg = (f) => new Promise((res) => {
 
 const initialMenu = [
   { id: 'p1', category: 'Pizza', name: 'Small Pizza', price: 139, stock: true, ingredients: [{ name: 'Pizza Base', cost: 30 }, { name: 'Cheese', cost: 40 }] },
-  { id: 'p2', category: 'Pizza', name: 'Classic Margarita Pizza', price: 149, v: [{name: 'Regular', price: 149}, {name: 'Large', price: 189}], stock: true, ingredients: [{ name: 'Base', cost: 35 }, { name: 'Mozzarella', cost: 50 }] }
+  { id: 'p2', category: 'Pizza', name: 'Classic Margarita Pizza', price: 149, v: [['Regular', 149], ['Large', 189]], stock: true, ingredients: [{ name: 'Base', cost: 35 }, { name: 'Mozzarella', cost: 50 }] }
 ];
 
 const initialStock = [{ id: 'i1', name: 'Pizza Base', qty: 40, price: 500, min: 10 }, { id: 'i2', name: 'Burger Buns', qty: 30, price: 300, min: 10 }];
@@ -125,7 +125,6 @@ export default function App() {
       } else {
         const docs = snap.docs.map(d => {
           const data = d.data();
-          // Convert stored variants object format back to [name, price] tuples for frontend compatibility
           let convertedV = null;
           if (data.v && Array.isArray(data.v)) {
             convertedV = data.v.map(x => Array.isArray(x) ? x : [x.name, x.price]);
@@ -394,7 +393,7 @@ function AdminLoginModal({ onClose, onSuccess }) {
   );
 }
 
-/* ---------------- CUSTOMER VIEW ---------------- */
+/* ---------------- CUSTOMER VIEW WITH SEARCH & AUTO BANNER ---------------- */
 function CustomerView({ tableNumber, customerName, customerPhone, menuItems, activeOrders, coupons, cafeConfig, onPlaceOrder, onExit }) {
   const [cart, setCart] = useState([]); 
   const [checkout, setCheckout] = useState(false);
@@ -402,6 +401,7 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
   const [couponCodeInput, setCouponCodeInput] = useState('');
   const [couponError, setCouponError] = useState('');
   const [bannerIdx, setBannerIdx] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const defaultBanners = [
     { title: "More Cheese. More Happiness.", desc: "Hot, cheesy and baked with love, just for you.", bg: "from-purple-900 to-indigo-900", img: "" },
@@ -409,7 +409,13 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
     { title: "Fresh Desserts & Shakes", desc: "Sweet endings to make your day happier.", bg: "from-purple-950 to-purple-900", img: "" }
   ];
 
-  const banners = (cafeConfig.banners && cafeConfig.banners.length > 0) ? cafeConfig.banners : defaultBanners;
+  const rawBanners = (cafeConfig.banners && cafeConfig.banners.length > 0) ? cafeConfig.banners : defaultBanners;
+  const banners = rawBanners.map((b, idx) => ({
+    title: b.title || defaultBanners[idx]?.title || "Eternal Crust Café",
+    desc: b.desc || defaultBanners[idx]?.desc || "Good food travels better.",
+    bg: b.bg || defaultBanners[idx]?.bg || "from-purple-900 to-indigo-900",
+    img: b.img || ""
+  }));
 
   useEffect(() => {
     const t = setInterval(() => setBannerIdx(p => (p + 1) % banners.length), 4000);
@@ -459,7 +465,13 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
     else { playSfx('error'); setCouponError('Invalid Coupon Code'); }
   };
 
-  const displayedMenu = activeCat === 'All' ? menuItems : menuItems.filter(i => i.category === activeCat);
+  const displayedMenu = useMemo(() => {
+    let list = activeCat === 'All' ? menuItems : menuItems.filter(i => i.category === activeCat);
+    if (searchQuery.trim()) {
+      list = menuItems.filter(i => i.name.toLowerCase().includes(searchQuery.toLowerCase()) || i.category.toLowerCase().includes(searchQuery.toLowerCase()));
+    }
+    return list;
+  }, [menuItems, activeCat, searchQuery]);
 
   return (
     <div className="bg-purple-950 fixed inset-0 flex justify-center overflow-hidden">
@@ -471,6 +483,12 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
             ) : <div className="w-9 h-9" />}
             <div className="bg-purple-950/50 px-4 py-1.5 rounded-full border border-purple-700/50"><h1 className="text-sm font-black tracking-widest uppercase text-purple-200">Table {tableNumber} | {customerName || 'Guest'}</h1></div>
             <div className="w-9 h-9" />
+          </div>
+
+          {/* Search Bar */}
+          <div className="relative mb-3">
+            <Search className="absolute left-3 top-3 w-4 h-4 text-purple-300"/>
+            <input type="text" placeholder="Search your favorite food..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-purple-950/60 border border-purple-700/60 rounded-xl pl-9 pr-3 py-2 text-xs font-bold text-white placeholder-purple-300 outline-none focus:border-white" />
           </div>
 
           <div className="flex overflow-x-auto gap-3 pb-2 pt-1 scrollbar-hide">
@@ -778,7 +796,7 @@ function CouponsTab({ coupons, db }) {
   );
 }
 
-/* ---------------- MENU CRUD TAB WITH PROPER VARIANT SUBMISSION ---------------- */
+/* ---------------- MENU CRUD TAB ---------------- */
 function MenuTab({ menuItems, db }) {
   const [edit, setEdit] = useState(undefined);
   const [search, setSearch] = useState('');
@@ -888,7 +906,7 @@ function MenuForm({ item, categories, descriptions, onSave, onClose }) {
       desc: desc.trim(),
       img,
       price: hasVariants && variantList.length > 0 ? variantList[0][1] : Number(price),
-      v: hasVariants && variantList.length > 0 ? variantList.map(v => ({ name: v[0], price: v[1] })) : null,
+      v: hasVariants && variantList.length > 0 ? variantList : null,
       ingredients: cleanIngredients,
       stock: item ? item.stock : true
     });
@@ -916,8 +934,8 @@ function MenuForm({ item, categories, descriptions, onSave, onClose }) {
         {hasVariants && (
           <div className="bg-slate-50 p-3.5 rounded-2xl border space-y-3">
             <label className="text-xs font-black text-slate-700 uppercase">Add Size & Price</label>
-            <div className="flex flex-wrap items-center gap-2">
-              <select value={variantSize} onChange={e => setVariantSize(e.target.value)} className="border rounded-xl px-3 py-2 text-xs font-bold bg-white w-28">
+            <div className="flex items-center gap-2">
+              <select value={variantSize} onChange={e => setVariantSize(e.target.value)} className="border rounded-xl px-2 py-2 text-xs font-bold bg-white w-28">
                 <option value="Small">Small</option>
                 <option value="Medium">Medium</option>
                 <option value="Large">Large</option>
@@ -925,8 +943,8 @@ function MenuForm({ item, categories, descriptions, onSave, onClose }) {
                 <option value="Full">Full</option>
                 <option value="Regular">Regular</option>
               </select>
-              <input type="number" value={variantPrice} onChange={e => setVariantPrice(e.target.value)} placeholder="Price ₹" className="flex-1 min-w-[90px] border rounded-xl px-3 py-2 text-xs font-bold bg-white" />
-              <button type="button" onClick={addVariantItem} className="bg-purple-700 hover:bg-purple-800 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md">Add</button>
+              <input type="number" value={variantPrice} onChange={e => setVariantPrice(e.target.value)} placeholder="Price ₹" className="flex-1 border rounded-xl px-3 py-2 text-xs font-bold bg-white" />
+              <button type="button" onClick={addVariantItem} className="bg-purple-700 hover:bg-purple-800 text-white px-4 py-2 rounded-xl text-xs font-bold shrink-0 shadow-md">Add</button>
             </div>
             <div className="flex flex-wrap gap-1.5 mt-2">
               {variantList.map((v, i) => (
@@ -1199,13 +1217,15 @@ function HistoryTab({ history, stockInv, iceInv, menuItems, db }) {
   );
 }
 
-/* ---------------- SETTINGS TAB ---------------- */
+/* ---------------- SETTINGS TAB WITH BANNER TEXT & IMAGE ---------------- */
 function SettingsTab({ cafeConfig, db }) {
   const fileRef = useRef(null);
   const [upi, setUpi] = useState(cafeConfig.upiId || 'snehaltitkare58-2@okicici');
-  const [b1, setB1] = useState(cafeConfig.banners?.[0]?.img || '');
-  const [b2, setB2] = useState(cafeConfig.banners?.[1]?.img || '');
-  const [b3, setB3] = useState(cafeConfig.banners?.[2]?.img || '');
+  const [banners, setBanners] = useState(cafeConfig.banners || [
+    { title: "More Cheese. More Happiness.", desc: "Hot, cheesy and baked with love, just for you.", bg: "from-purple-900 to-indigo-900", img: "" },
+    { title: "Exclusive Combos", desc: "Save up to 30% OFF on selected family combos!", bg: "from-indigo-900 to-purple-950", img: "" },
+    { title: "Fresh Desserts & Shakes", desc: "Sweet endings to make your day happier.", bg: "from-purple-950 to-purple-900", img: "" }
+  ]);
   const logoRef = useRef(null);
 
   const saveLogo = async (url) => {
@@ -1220,13 +1240,20 @@ function SettingsTab({ cafeConfig, db }) {
     alert('UPI ID updated successfully!');
   };
 
-  const saveBanners = async () => {
+  const updateBannerField = (index, field, val) => {
+    const updated = [...banners];
+    updated[index][field] = val;
+    setBanners(updated);
+  };
+
+  const removeBannerImg = (index) => {
+    const updated = [...banners];
+    updated[index].img = "";
+    setBanners(updated);
+  };
+
+  const saveBannersToDb = async () => {
     playSfx('save');
-    const banners = [
-      { title: "More Cheese. More Happiness.", desc: "Hot, cheesy and baked with love, just for you.", bg: "from-purple-900 to-indigo-900", img: b1 },
-      { title: "Exclusive Combos", desc: "Save up to 30% OFF on selected family combos!", bg: "from-indigo-900 to-purple-950", img: b2 },
-      { title: "Fresh Desserts & Shakes", desc: "Sweet endings to make your day happier.", bg: "from-purple-950 to-purple-900", img: b3 }
-    ];
     await setDoc(doc(db, 'settings', 'config'), { ...cafeConfig, banners });
     alert('Banners updated successfully!');
   };
@@ -1253,12 +1280,26 @@ function SettingsTab({ cafeConfig, db }) {
       </div>
 
       <div className="bg-white rounded-3xl border border-slate-200 p-8">
-        <h2 className="text-2xl font-black text-slate-900 mb-4">Manage 3 Banner Images</h2>
-        <div className="space-y-4">
-          <div><label className="text-xs font-bold text-slate-500 uppercase">Banner 1 Image</label><input type="file" accept="image/*" onChange={async e => { if(e.target.files[0]) setB1(await readImg(e.target.files[0])); }} className="w-full text-xs mt-1" /></div>
-          <div><label className="text-xs font-bold text-slate-500 uppercase">Banner 2 Image</label><input type="file" accept="image/*" onChange={async e => { if(e.target.files[0]) setB2(await readImg(e.target.files[0])); }} className="w-full text-xs mt-1" /></div>
-          <div><label className="text-xs font-bold text-slate-500 uppercase">Banner 3 Image</label><input type="file" accept="image/*" onChange={async e => { if(e.target.files[0]) setB3(await readImg(e.target.files[0])); }} className="w-full text-xs mt-1" /></div>
-          <button onClick={saveBanners} className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-3 rounded-xl mt-2">Save Banners</button>
+        <h2 className="text-2xl font-black text-slate-900 mb-6">Manage Banner Sliders (Text & Image)</h2>
+        <div className="space-y-6">
+          {banners.map((b, idx) => (
+            <div key={idx} className="p-4 bg-slate-50 rounded-2xl border space-y-3">
+              <p className="font-black text-sm text-purple-900">Banner {idx + 1}</p>
+              <div><label className="text-[10px] font-bold text-slate-500 uppercase">Banner Title / Quote</label><input type="text" value={b.title} onChange={e => updateBannerField(idx, 'title', e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
+              <div><label className="text-[10px] font-bold text-slate-500 uppercase">Banner Description</label><input type="text" value={b.desc} onChange={e => updateBannerField(idx, 'desc', e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
+              
+              <div className="flex items-center gap-3">
+                <div className="w-16 h-12 bg-slate-200 rounded-lg overflow-hidden flex items-center justify-center shrink-0">
+                  {b.img ? <img src={b.img} className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-slate-400"/>}
+                </div>
+                <div className="flex-1 flex gap-2">
+                  <input type="file" accept="image/*" onChange={async e => { if(e.target.files[0]) updateBannerField(idx, 'img', await readImg(e.target.files[0])); }} className="text-xs" />
+                  {b.img && <button onClick={() => removeBannerImg(idx)} className="text-red-500 text-xs font-bold underline">Remove Img</button>}
+                </div>
+              </div>
+            </div>
+          ))}
+          <button onClick={saveBannersToDb} className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-3.5 rounded-xl">Save All Banners</button>
         </div>
       </div>
     </div>
