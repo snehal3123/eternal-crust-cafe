@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Coffee, Utensils, Plus, Minus, ChevronLeft, LayoutDashboard, LogOut,
   CheckCircle, Clock, ChefHat, Bell, Edit, Trash2, ToggleLeft, ToggleRight, QrCode, Printer,
-  CreditCard, Banknote, X, History, Download, Image as ImageIcon, Package, AlertTriangle, Upload, IceCream, Lock, Eye, EyeOff, Settings, Volume2, VolumeX, Mic, Search, MessageSquare, Tag
+  CreditCard, Banknote, X, History, Download, Image as ImageIcon, Package, AlertTriangle, Upload, IceCream, Lock, Eye, EyeOff, Settings, Volume2, VolumeX, Mic, Search, MessageSquare, Tag, Wallet
 } from 'lucide-react';
 
 /* ---------------- AUDIO & VOICE ENGINE ---------------- */
@@ -103,6 +103,7 @@ export default function App() {
   const [tables, setTables] = useState([]);
   const [stockInv, setStockInv] = useState([]);
   const [iceInv, setIceInv] = useState([]);
+  const [expenses, setExpenses] = useState([]);
   const [coupons, setCoupons] = useState([]);
   const [cafeConfig, setCafeConfig] = useState({ logo: '', upiId: 'snehaltitkare58-2@okicici', banners: [] });
 
@@ -167,6 +168,10 @@ export default function App() {
       }
     });
 
+    const unsubExpenses = onSnapshot(collection(db, 'petty_expenses'), (snap) => {
+      setExpenses(snap.docs.map(d => ({ ...d.data(), id: d.id })));
+    });
+
     const unsubCoupons = onSnapshot(collection(db, 'coupons'), (snap) => {
       setCoupons(snap.docs.map(d => ({ ...d.data(), id: d.id })));
     });
@@ -176,7 +181,7 @@ export default function App() {
     });
 
     return () => {
-      unsubMenu(); unsubOrders(); unsubHistory(); unsubTables(); unsubStock(); unsubIce(); unsubCoupons(); unsubSettings();
+      unsubMenu(); unsubOrders(); unsubHistory(); unsubTables(); unsubStock(); unsubIce(); unsubExpenses(); unsubCoupons(); unsubSettings();
     };
   }, []);
 
@@ -279,7 +284,7 @@ ${discountLine}*Total : ₹${o.total}*
     <div className="min-h-screen bg-purple-950 font-sans text-slate-100 selection:bg-purple-500">
       {mode === 'landing' && <LandingView tables={tables} activeOrders={activeOrders} logo={cafeConfig.logo} onJoin={joinTable} onAdminLogin={adminLoginSuccess} />}
       {mode === 'customer' && <CustomerView tableNumber={table} customerName={customerName} customerPhone={customerPhone} menuItems={menuItems} activeOrders={activeOrders} coupons={coupons} cafeConfig={cafeConfig} onPlaceOrder={placeOrder} onExit={exitTable} />}
-      {mode === 'admin' && isAdminAuth && <AdminDashboard {...{ activeOrders, setActiveOrders, orderHistory, setOrderHistory, completeOrder, cancelOrder, menuItems, setMenuItems, tables, setTables, stockInv, setStockInv, iceInv, setIceInv, coupons, setCoupons, cafeConfig, db }} onExit={adminLogout} />}
+      {mode === 'admin' && isAdminAuth && <AdminDashboard {...{ activeOrders, setActiveOrders, orderHistory, setOrderHistory, completeOrder, cancelOrder, menuItems, setMenuItems, tables, setTables, stockInv, setStockInv, iceInv, setIceInv, expenses, setExpenses, coupons, setCoupons, cafeConfig, db }} onExit={adminLogout} />}
     </div>
   );
 }
@@ -411,7 +416,6 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
 
   const banners = (cafeConfig.banners && cafeConfig.banners.length > 0) ? cafeConfig.banners : defaultBanners;
 
-  // Auto-scrolling banner slowly
   useEffect(() => {
     const t = setInterval(() => setBannerIdx(p => (p + 1) % banners.length), 5000);
     return () => clearInterval(t);
@@ -420,8 +424,25 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
   const cats = ['All', ...new Set(menuItems.map(i => i.category))]; 
   const [activeCat, setActiveCat] = useState('All');
 
+  // Compute subtotal and category-wise / total discount calculation
   const rawTotal = cart.reduce((s, c) => s + c.price * c.qty, 0); 
-  const discountAmount = selectedCoupon ? Math.round((rawTotal * selectedCoupon.discount) / 100) : 0;
+  
+  let discountAmount = 0;
+  if (selectedCoupon) {
+    if (selectedCoupon.type === 'flat') {
+      discountAmount = Number(selectedCoupon.value);
+    } else if (selectedCoupon.type === 'category') {
+      const eligibleTotal = cart.filter(c => {
+        const itemObj = menuItems.find(m => m.name === c.name.split(' (')[0]);
+        return itemObj && itemObj.category === selectedCoupon.category;
+      }).reduce((s, c) => s + c.price * c.qty, 0);
+      discountAmount = Math.round((eligibleTotal * Number(selectedCoupon.value)) / 100);
+    } else {
+      // Percentage on total
+      discountAmount = Math.round((rawTotal * Number(selectedCoupon.value)) / 100);
+    }
+  }
+
   const total = Math.max(0, rawTotal - discountAmount);
   const count = cart.reduce((s, c) => s + c.qty, 0);
 
@@ -482,7 +503,6 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
             <div className="w-9 h-9" />
           </div>
 
-          {/* Search Bar */}
           <div className="relative mb-3">
             <Search className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
             <input type="text" placeholder="Search your favorite food..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-white/10 backdrop-blur-md border border-purple-700/50 rounded-2xl pl-10 pr-4 py-2.5 text-sm font-bold text-white placeholder-purple-300 outline-none focus:bg-white focus:text-slate-900 transition-all" />
@@ -510,12 +530,9 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 bg-slate-100">
-          {/* Banner without dark shadow */}
           <div className={`w-full rounded-3xl ${banners[bannerIdx].img ? 'bg-slate-900' : 'bg-gradient-to-r ' + banners[bannerIdx].bg} text-white p-5 mb-5 shadow-lg relative overflow-hidden transition-all duration-700 min-h-[150px] flex flex-col justify-end`}>
-            {banners[bannerIdx].img ? (
-              <img src={banners[bannerIdx].img} alt="" className="absolute inset-0 w-full h-full object-cover" />
-            ) : null}
-            <div className={`relative z-10 ${banners[bannerIdx].img ? '' : ''}`}>
+            {banners[bannerIdx].img && <img src={banners[bannerIdx].img} alt="" className="absolute inset-0 w-full h-full object-cover" />}
+            <div className="relative z-10">
               {!banners[bannerIdx].img && (
                 <>
                   <h2 className="text-xl font-black mb-1 drop-shadow-md">{banners[bannerIdx].title}</h2>
@@ -584,7 +601,7 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
               
               <div className="bg-purple-50 p-4 rounded-3xl mb-5 border border-purple-100 shadow-inner">
                 <div className="flex justify-between items-center mb-2"><span className="text-xs font-bold text-purple-600 uppercase">Subtotal</span><span className="font-bold text-slate-700">₹{rawTotal}</span></div>
-                {selectedCoupon && <div className="flex justify-between items-center mb-2 text-emerald-600 text-sm font-bold"><span>Discount ({selectedCoupon.code} - {selectedCoupon.discount}%)</span><span>-₹{discountAmount}</span></div>}
+                {selectedCoupon && <div className="flex justify-between items-center mb-2 text-emerald-600 text-sm font-bold"><span>Discount ({selectedCoupon.code} - {selectedCoupon.type === 'flat' ? `₹${selectedCoupon.value} OFF` : `${selectedCoupon.value}% OFF`})</span><span>-₹{discountAmount}</span></div>}
                 <div className="flex justify-between items-center pt-2 border-t border-purple-200"><span className="text-xs font-bold text-purple-600 uppercase">Final Total</span><span className="text-3xl font-black text-purple-900">₹{total}</span></div>
                 
                 <div className="space-y-3 max-h-36 overflow-y-auto pr-2 mt-4 pt-3 border-t border-purple-200">{cart.map(c => <div key={c.key} className="flex items-center justify-between text-xs text-slate-700 font-bold border-b border-purple-100/50 pb-1.5"><span className="flex-1">{c.name}</span><div className="flex items-center gap-1.5 mx-2"><button onClick={() => chg(c.key, -1)} className="px-1.5 bg-white rounded shadow-sm">-</button><span>{c.qty}</span><button onClick={() => chg(c.key, 1)} className="px-1.5 bg-white rounded shadow-sm">+</button></div><span className="w-10 text-right">₹{c.price * c.qty}</span></div>)}</div>
@@ -596,7 +613,7 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
                   <div className="flex flex-wrap gap-2 mb-3">
                     {coupons.map(c => (
                       <button key={c.id} onClick={() => applyCoupon(c)} className={`px-3 py-2 rounded-xl text-xs font-bold border flex items-center gap-2 ${selectedCoupon?.id === c.id ? 'bg-purple-700 text-white border-purple-700' : 'bg-purple-50 text-purple-700 border-purple-200'}`}>
-                        <span>{c.code} ({c.discount}% OFF)</span>
+                        <span>{c.code} ({c.type === 'flat' ? `₹${c.value} OFF` : `${c.value}% OFF`})</span>
                       </button>
                     ))}
                   </div>
@@ -638,7 +655,7 @@ function PaymentTimer({ order, upiId }) {
   );
 }
 
-/* ---------------- FULL ADMIN DASHBOARD ---------------- */
+/* ---------------- FULL ADMIN DASHBOARD (STICKY MOBILE SIDEBAR) ---------------- */
 function AdminDashboard(p) {
   const [tab, setTab] = useState('orders');
   
@@ -683,23 +700,25 @@ function AdminDashboard(p) {
 
   return (
     <div className="flex h-screen bg-slate-50 text-slate-900 overflow-hidden font-sans">
-      <aside className="w-20 md:w-64 bg-purple-950 text-purple-300 flex flex-col shadow-2xl z-20 shrink-0">
-        <div className="p-4 md:p-6 flex items-center gap-3 border-b border-purple-900/50"><div className="bg-purple-600 p-2 rounded-xl text-white"><LayoutDashboard className="w-6 h-6"/></div><span className="font-black text-xl hidden md:block text-white">Admin Hub</span></div>
-        <nav className="flex-1 py-6 space-y-2 px-3 overflow-y-auto">
+      {/* Sticky & Compact Sidebar for Mobile & Desktop */}
+      <aside className="w-20 md:w-64 bg-purple-950 text-purple-300 flex flex-col shadow-2xl z-20 shrink-0 h-full">
+        <div className="p-3 md:p-6 flex items-center gap-3 border-b border-purple-900/50"><div className="bg-purple-600 p-2 rounded-xl text-white"><LayoutDashboard className="w-5 h-5"/></div><span className="font-black text-lg hidden md:block text-white">Admin Hub</span></div>
+        <nav className="flex-1 py-3 md:py-6 space-y-1 md:space-y-2 px-2 md:px-3 overflow-y-auto">
           <SideBtn icon={<Bell/>} label="Live Orders" active={tab === 'orders'} onClick={() => { playSfx('click'); setTab('orders'); }} badge={p.activeOrders.filter(o => o.status === 'Verifying' || o.status === 'Pending').length} />
           <SideBtn icon={<Utensils/>} label="Menu Manager" active={tab === 'menu'} onClick={() => { playSfx('click'); setTab('menu'); }} />
           <SideBtn icon={<Package/>} label="Inventory" active={tab === 'inventory'} onClick={() => { playSfx('click'); setTab('inventory'); }} />
+          <SideBtn icon={<Wallet/>} label="Daily Expenses" active={tab === 'expenses'} onClick={() => { playSfx('click'); setTab('expenses'); }} />
           <SideBtn icon={<Tag/>} label="Coupons" active={tab === 'coupons'} onClick={() => { playSfx('click'); setTab('coupons'); }} />
           <SideBtn icon={<QrCode/>} label="Table & QR" active={tab === 'qr'} onClick={() => { playSfx('click'); setTab('qr'); }} />
           <SideBtn icon={<History/>} label="Revenue & P/L" active={tab === 'history'} onClick={() => { playSfx('click'); setTab('history'); }} />
           <SideBtn icon={<Settings/>} label="Settings" active={tab === 'settings'} onClick={() => { playSfx('click'); setTab('settings'); }} />
         </nav>
-        <div className="p-4 border-t border-purple-900/50"><button onClick={() => { playSfx('click'); p.onExit(); }} className="flex items-center justify-center md:justify-start gap-3 w-full p-3 rounded-xl hover:bg-purple-900 hover:text-white transition-colors"><LogOut className="w-5 h-5"/><span className="font-bold hidden md:block">Logout</span></button></div>
+        <div className="p-3 md:p-4 border-t border-purple-900/50"><button onClick={() => { playSfx('click'); p.onExit(); }} className="flex items-center justify-center md:justify-start gap-3 w-full p-2.5 md:p-3 rounded-xl hover:bg-purple-900 hover:text-white transition-colors bg-purple-900/40 text-purple-200"><LogOut className="w-5 h-5"/><span className="font-bold hidden md:block">Logout</span></button></div>
       </aside>
 
       <main className="flex-1 flex flex-col h-screen overflow-hidden">
         <header className="bg-white px-5 md:px-8 py-4 flex justify-between items-center shadow-sm border-b border-slate-200 gap-4 shrink-0">
-          <h1 className="text-lg md:text-2xl font-black text-purple-950 capitalize truncate">{tab.replace('qr', 'Table & QR').replace('history', 'Revenue & Profit/Loss')}</h1>
+          <h1 className="text-lg md:text-2xl font-black text-purple-950 capitalize truncate">{tab.replace('qr', 'Table & QR').replace('history', 'Revenue & Profit/Loss').replace('expenses', 'Daily Expenses')}</h1>
           <div className="flex items-center gap-3 shrink-0">
             <button onClick={toggleSound} className={`p-2.5 rounded-xl transition-colors ${soundEnabled ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-400'}`}>{soundEnabled ? <Volume2 className="w-5 h-5"/> : <VolumeX className="w-5 h-5"/>}</button>
             <button onClick={toggleVoice} className={`p-2.5 rounded-xl transition-colors ${voiceEnabled ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-400'}`}><Mic className="w-5 h-5"/></button>
@@ -710,9 +729,10 @@ function AdminDashboard(p) {
           {tab === 'orders' && <OrdersBoard orders={p.activeOrders} updateStatus={updateStatus} cancelOrder={p.cancelOrder} />}
           {tab === 'menu' && <MenuTab menuItems={p.menuItems} db={p.db} />}
           {tab === 'inventory' && <InventoryTab stockInv={p.stockInv} iceInv={p.iceInv} db={p.db} />}
+          {tab === 'expenses' && <ExpensesTab expenses={p.expenses} db={p.db} />}
           {tab === 'coupons' && <CouponsTab coupons={p.coupons} db={p.db} />}
           {tab === 'qr' && <QRTab logo={p.cafeConfig.logo} />}
-          {tab === 'history' && <HistoryTab history={p.orderHistory} stockInv={p.stockInv} iceInv={p.iceInv} menuItems={p.menuItems} db={p.db} />}
+          {tab === 'history' && <HistoryTab history={p.orderHistory} stockInv={p.stockInv} iceInv={p.iceInv} expenses={p.expenses} menuItems={p.menuItems} db={p.db} />}
           {tab === 'settings' && <SettingsTab cafeConfig={p.cafeConfig} db={p.db} />}
         </div>
       </main>
@@ -764,17 +784,64 @@ function AdminCol({ title, icon, list, bg, text, action, color, onAction, onCanc
   );
 }
 
-/* ---------------- COUPONS MANAGEMENT TAB ---------------- */
+/* ---------------- DAILY EXPENSES / PETTY CASH TAB ---------------- */
+function ExpensesTab({ expenses, db }) {
+  const [name, setName] = useState('');
+  const [amount, setAmount] = useState('');
+
+  const addExpense = async (e) => {
+    e.preventDefault();
+    if (!name.trim() || !amount) return playSfx('error');
+    playSfx('save');
+    await setDoc(doc(db, 'petty_expenses', 'exp_' + Date.now()), { name: name.trim(), amount: Number(amount), date: Date.now() });
+    setName(''); setAmount('');
+  };
+
+  const deleteExpense = async (id) => {
+    playSfx('del');
+    await deleteDoc(doc(db, 'petty_expenses', id));
+  };
+
+  return (
+    <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 max-w-xl">
+      <h2 className="text-xl font-black text-slate-900 mb-4">Daily Expenses & Petty Cash Tracker</h2>
+      <form onSubmit={addExpense} className="space-y-4 mb-6 bg-slate-50 p-4 rounded-2xl border">
+        <div><label className="text-xs font-bold text-slate-500 uppercase">Expense Title (Light bill, Staff salary, etc.)</label><input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Electricity Bill" className={inpStyle} required /></div>
+        <div><label className="text-xs font-bold text-slate-500 uppercase">Amount (₹)</label><input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="e.g. 1500" className={inpStyle} required min={1} /></div>
+        <button type="submit" className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-3 rounded-xl">Add Expense</button>
+      </form>
+      <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+        {expenses.map(e => (
+          <div key={e.id} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl border">
+            <div><p className="font-black text-slate-900">{e.name}</p><p className="text-xs text-slate-400 font-bold">{new Date(e.date).toLocaleDateString()}</p></div>
+            <div className="flex items-center gap-3"><span className="font-black text-red-600">₹{e.amount}</span><DelBtn onDel={() => deleteExpense(e.id)} /></div>
+          </div>
+        ))}
+        {expenses.length === 0 && <p className="text-center text-slate-400 font-bold text-sm">No expenses recorded yet.</p>}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- ADVANCED COUPONS TAB (₹ or % + Category) ---------------- */
 function CouponsTab({ coupons, db }) {
   const [code, setCode] = useState('');
-  const [discount, setDiscount] = useState(10);
+  const [type, setType] = useState('percent'); // percent, flat, category
+  const [value, setValue] = useState(10);
+  const [category, setCategory] = useState('Pizza');
 
   const addCoupon = async (e) => {
     e.preventDefault();
     if (!code.trim()) return playSfx('error');
     playSfx('save');
-    await setDoc(doc(db, 'coupons', 'c_' + Date.now()), { code: code.trim().toUpperCase(), discount: Number(discount) });
-    setCode(''); setDiscount(10);
+    await setDoc(doc(db, 'coupons', 'c_' + Date.now()), {
+      code: code.trim().toUpperCase(),
+      type,
+      value: Number(value),
+      discount: type === 'percent' ? Number(value) : 10, // fallback
+      category: type === 'category' ? category : ''
+    });
+    setCode(''); setValue(10);
   };
 
   const deleteCoupon = async (id) => { playSfx('del'); await deleteDoc(doc(db, 'coupons', id)); };
@@ -783,14 +850,41 @@ function CouponsTab({ coupons, db }) {
     <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 max-w-xl">
       <h2 className="text-xl font-black text-slate-900 mb-4">Manage Discount Coupons</h2>
       <form onSubmit={addCoupon} className="space-y-4 mb-6 bg-slate-50 p-4 rounded-2xl border">
-        <div><label className="text-xs font-bold text-slate-500 uppercase">Coupon Code</label><input type="text" value={code} onChange={e => setCode(e.target.value)} placeholder="e.g. SPECIAL10" className={inpStyle} required /></div>
-        <div><label className="text-xs font-bold text-slate-500 uppercase">Discount Percentage (%)</label><input type="number" value={discount} onChange={e => setDiscount(e.target.value)} className={inpStyle} required min={1} max={100} /></div>
+        <div><label className="text-xs font-bold text-slate-500 uppercase">Coupon Code</label><input type="text" value={code} onChange={e => setCode(e.target.value)} placeholder="e.g. PIZZA30OFF" className={inpStyle} required /></div>
+        
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs font-bold text-slate-500 uppercase">Discount Type</label>
+            <select value={type} onChange={e => setType(e.target.value)} className={inpStyle + ' py-3 text-xs bg-white'}>
+              <option value="percent">Percentage (%) Off</option>
+              <option value="flat">Flat Amount (₹) Off</option>
+              <option value="category">Category Specific (₹/%)</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs font-bold text-slate-500 uppercase">Discount Value</label>
+            <input type="number" value={value} onChange={e => setValue(e.target.value)} placeholder={type === 'flat' ? 'Amount ₹' : 'Percentage %'} className={inpStyle} required min={1} />
+          </div>
+        </div>
+
+        {type === 'category' && (
+          <div>
+            <label className="text-xs font-bold text-slate-500 uppercase">Target Category</label>
+            <input type="text" value={category} onChange={e => setCategory(e.target.value)} placeholder="e.g. Pizza, Beverages" className={inpStyle} required />
+          </div>
+        )}
+
         <button type="submit" className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-3 rounded-xl">Add Coupon</button>
       </form>
       <div className="space-y-2">
         {coupons.map(c => (
           <div key={c.id} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl border">
-            <div><p className="font-black text-purple-900">{c.code}</p><p className="text-xs font-bold text-slate-500">{c.discount}% OFF on total bill</p></div>
+            <div>
+              <p className="font-black text-purple-900">{c.code}</p>
+              <p className="text-xs font-bold text-slate-500">
+                {c.type === 'flat' ? `Flat ₹${c.value} OFF` : c.type === 'category' ? `${c.value}% OFF on ${c.category}` : `${c.value}% OFF on total bill`}
+              </p>
+            </div>
             <DelBtn onDel={() => deleteCoupon(c.id)} />
           </div>
         ))}
@@ -930,7 +1024,7 @@ function MenuForm({ item, categories, descriptions, onSave, onClose }) {
       desc: desc.trim(),
       img,
       price: hasVariants && variantList.length > 0 ? variantList[0][1] : Number(price),
-      v: hasVariants && variantList.length > 0 ? variantList : null,
+      v: hasVariants && variantList.length > 0 ? variantList.map(v => [v[0], Number(v[1])]) : null,
       ingredients: cleanIngredients,
       stock: item ? item.stock : true
     });
@@ -958,9 +1052,8 @@ function MenuForm({ item, categories, descriptions, onSave, onClose }) {
         {hasVariants && (
           <div className="bg-slate-50 p-3.5 rounded-2xl border space-y-3">
             <label className="text-xs font-black text-slate-700 uppercase">Add Size & Price</label>
-            {/* Flex container inside card with proper wrap and width */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-              <select value={variantSize} onChange={e => setVariantSize(e.target.value)} className="border rounded-xl px-3 py-2 text-xs font-bold bg-white">
+            <div className="flex flex-wrap items-center gap-2">
+              <select value={variantSize} onChange={e => setVariantSize(e.target.value)} className="border rounded-xl px-3 py-2 text-xs font-bold bg-white w-28">
                 <option value="Small">Small</option>
                 <option value="Medium">Medium</option>
                 <option value="Large">Large</option>
@@ -1172,15 +1265,17 @@ function QRTab({ logo }) {
   );
 }
 
-/* ---------------- REVENUE & PROFIT/LOSS SECTION ---------------- */
-function HistoryTab({ history, stockInv, iceInv, menuItems, db }) {
+/* ---------------- REVENUE & PROFIT/LOSS SECTION (WITH EXPENSES) ---------------- */
+function HistoryTab({ history, stockInv, iceInv, expenses, menuItems, db }) {
   const [from, setFrom] = useState(''); const [to, setTo] = useState('');
   const rows = useMemo(() => history.filter(o => { const d = new Date(o.completedAt || o.time); const ymdStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); return (!from || ymdStr >= from) && (!to || ymdStr <= to); }), [history, from, to]);
   
   const totalRevenue = rows.reduce((s, o) => s + o.total, 0);
   const totalStockExpense = stockInv.reduce((s, i) => s + (i.price || 0), 0);
   const totalIceExpense = iceInv.reduce((s, i) => s + (i.price || 0), 0);
-  const totalExpense = totalStockExpense + totalIceExpense;
+  const totalPettyExpenses = expenses.reduce((s, e) => s + Number(e.amount || 0), 0);
+  
+  const totalExpense = totalStockExpense + totalIceExpense + totalPettyExpenses;
   const netProfitLoss = totalRevenue - totalExpense;
 
   const deleteHistory = async (id) => { playSfx('del'); await deleteDoc(doc(db, 'history', id)); };
@@ -1188,7 +1283,7 @@ function HistoryTab({ history, stockInv, iceInv, menuItems, db }) {
   const dlCsv = () => {
     playSfx('save');
     let c = 'ID,Table,Customer Name,Phone,Date,Time,Payment,Total,Items\n' + rows.map(o => { const d = new Date(o.completedAt || o.time); return `${o.id},${o.table},"${o.customerName || ''}",${o.customerPhone || ''},${d.toLocaleDateString()},${d.toLocaleTimeString()},${o.payment},${o.total},"${o.items.map(i => `${i.qty}x${i.name}`).join('; ')}"`; }).join('\n');
-    c += `\n,,,,,,TOTAL REVENUE,${totalRevenue},\n,,,,,,TOTAL EXPENSE,${totalExpense},\n,,,,,,NET PROFIT/LOSS,${netProfitLoss},`;
+    c += `\n,,,,,,TOTAL REVENUE,${totalRevenue},\n,,,,,,TOTAL EXPENSES,${totalExpense},\n,,,,,,NET PROFIT/LOSS,${netProfitLoss},`;
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([c], { type: 'text/csv' })); a.download = `financial_report_${from || 'all'}_${to || 'all'}.csv`; a.click();
   };
 
@@ -1202,7 +1297,7 @@ function HistoryTab({ history, stockInv, iceInv, menuItems, db }) {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-purple-800 rounded-3xl p-5 text-white"><p className="text-purple-200 font-bold text-xs uppercase mb-1">Total Sales</p><h2 className="text-2xl font-black">₹{totalRevenue}</h2></div>
-        <div className="bg-amber-600 rounded-3xl p-5 text-white"><p className="text-amber-100 font-bold text-xs uppercase mb-1">Total Expense</p><h2 className="text-2xl font-black">₹{totalExpense}</h2></div>
+        <div className="bg-amber-600 rounded-3xl p-5 text-white"><p className="text-amber-100 font-bold text-xs uppercase mb-1">Total Expenses (Stock + Petty)</p><h2 className="text-2xl font-black">₹{totalExpense}</h2></div>
         <div className={`rounded-3xl p-5 text-white ${netProfitLoss >= 0 ? 'bg-green-600' : 'bg-red-600'}`}><p className="text-white/80 font-bold text-xs uppercase mb-1">Net Profit / Loss</p><h2 className="text-2xl font-black">₹{netProfitLoss}</h2></div>
         <div className="bg-white rounded-3xl p-4 border border-slate-200 flex flex-col justify-center"><button onClick={dlCsv} disabled={!rows.length} className="bg-indigo-600 text-white font-black py-2.5 rounded-xl flex items-center justify-center gap-2 disabled:opacity-40 text-xs"><Download className="w-4 h-4"/> Export Report</button></div>
       </div>
