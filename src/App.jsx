@@ -307,7 +307,7 @@ function DelBtn({ onDel }) {
   return <button onClick={() => { playSfx('click'); if (a) onDel(); else setA(true); }} className={`p-2 rounded-xl transition-colors text-xs font-black shrink-0 ${a ? 'bg-red-600 text-white' : 'bg-slate-50 text-slate-400 hover:text-red-600 hover:bg-red-50'}`}>{a ? 'Sure?' : <Trash2 className="w-4 h-4"/>}</button>;
 }
 
-/* ---------------- LANDING VIEW ---------------- */
+/* ---------------- LANDING VIEW WITH COPYRIGHT FOOTER ---------------- */
 function LandingView({ tables, activeOrders, logo, onJoin, onAdminLogin }) {
   const [showLogin, setShowLogin] = useState(false);
   const [wi, setWi] = useState(0);
@@ -331,7 +331,7 @@ function LandingView({ tables, activeOrders, logo, onJoin, onAdminLogin }) {
   };
 
   return (
-    <div className="relative min-h-screen flex flex-col overflow-hidden bg-gradient-to-b from-purple-950 via-purple-900 to-indigo-950" onWheel={(e) => setWi(p => e.deltaY > 0 ? Math.min(p + 1, sortedTables.length - 1) : Math.max(p - 1, 0))}>
+    <div className="relative min-h-screen flex flex-col justify-between overflow-x-hidden bg-gradient-to-b from-purple-950 via-purple-900 to-indigo-950" onWheel={(e) => setWi(p => e.deltaY > 0 ? Math.min(p + 1, sortedTables.length - 1) : Math.max(p - 1, 0))}>
       <div className="absolute top-6 right-6 z-50"><button onClick={() => { playSfx('click'); setShowLogin(true); }} className="p-3 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full text-white"><Lock className="w-5 h-5"/></button></div>
       
       <div className="flex-1 flex flex-col items-center justify-center p-6 w-full max-w-4xl mx-auto">
@@ -369,6 +369,11 @@ function LandingView({ tables, activeOrders, logo, onJoin, onAdminLogin }) {
         </div>
       </div>
 
+      {/* Footer with Copyright */}
+      <footer className="py-4 text-center text-purple-300/70 text-xs font-bold tracking-wider z-10">
+        © 2026 {CAFE_NAME}. All rights reserved.
+      </footer>
+
       {showModal && (
         <Modal title={`Join Table ${currentTable.name}`} onClose={() => setShowModal(false)}>
           <form onSubmit={handleProceed} className="space-y-4">
@@ -398,7 +403,7 @@ function AdminLoginModal({ onClose, onSuccess }) {
   );
 }
 
-/* ---------------- CUSTOMER VIEW WITH SEARCH & PRICE SORTING ---------------- */
+/* ---------------- CUSTOMER VIEW WITH COPYRIGHT FOOTER ---------------- */
 function CustomerView({ tableNumber, customerName, customerPhone, menuItems, activeOrders, coupons, cafeConfig, onPlaceOrder, onExit }) {
   const [cart, setCart] = useState([]); 
   const [checkout, setCheckout] = useState(false);
@@ -407,7 +412,7 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
   const [couponError, setCouponError] = useState('');
   const [bannerIdx, setBannerIdx] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortOrder, setSortOrder] = useState('default'); // 'default', 'lowToHigh', 'highToLow'
+  const [sortOrder, setSortOrder] = useState('default');
 
   const defaultBanners = [
     { title: "More Cheese. More Happiness.", desc: "Hot, cheesy and baked with love, just for you.", bg: "from-purple-900 to-indigo-900", img: "" },
@@ -425,7 +430,6 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
   const cats = ['All', ...new Set(menuItems.map(i => i.category))]; 
   const [activeCat, setActiveCat] = useState('All');
 
-  // Calculate discount taking category coupons into account
   const rawTotal = cart.reduce((s, c) => s + c.price * c.qty, 0); 
   const discountAmount = useMemo(() => {
     if (!selectedCoupon) return 0;
@@ -507,7 +511,6 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
             <div className="w-9 h-9" />
           </div>
 
-          {/* Search & Sort Row */}
           <div className="flex gap-2 mb-3">
             <div className="relative flex-1">
               <Search className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
@@ -541,65 +544,72 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-4 bg-slate-100">
-          <div className={`w-full rounded-3xl ${banners[bannerIdx].img ? 'bg-slate-900' : 'bg-gradient-to-r ' + banners[bannerIdx].bg} text-white p-5 mb-5 shadow-lg relative overflow-hidden transition-all duration-700 min-h-[150px] flex flex-col justify-end`}>
-            {banners[bannerIdx].img ? (
-              <img src={banners[bannerIdx].img} alt="" className="absolute inset-0 w-full h-full object-cover" />
-            ) : null}
-            <div className="relative z-10">
-              {!banners[bannerIdx].img && (
-                <>
-                  <h2 className="text-xl font-black mb-1 drop-shadow-md">{banners[bannerIdx].title}</h2>
-                  <p className="text-xs text-purple-100 font-medium mb-3 drop-shadow">{banners[bannerIdx].desc}</p>
-                </>
-              )}
-              <div className="flex gap-1.5 mt-2">
-                {banners.map((_, i) => <div key={i} className={`h-1.5 rounded-full transition-all ${bannerIdx === i ? 'w-6 bg-white' : 'w-1.5 bg-white/40'}`}></div>)}
+        <main className="flex-1 overflow-y-auto p-4 bg-slate-100 flex flex-col justify-between">
+          <div>
+            <div className={`w-full rounded-3xl ${banners[bannerIdx].img ? 'bg-slate-900' : 'bg-gradient-to-r ' + banners[bannerIdx].bg} text-white p-5 mb-5 shadow-lg relative overflow-hidden transition-all duration-700 min-h-[150px] flex flex-col justify-end`}>
+              {banners[bannerIdx].img ? (
+                <img src={banners[bannerIdx].img} alt="" className="absolute inset-0 w-full h-full object-cover" />
+              ) : null}
+              <div className="relative z-10">
+                {!banners[bannerIdx].img && (
+                  <>
+                    <h2 className="text-xl font-black mb-1 drop-shadow-md">{banners[bannerIdx].title}</h2>
+                    <p className="text-xs text-purple-100 font-medium mb-3 drop-shadow">{banners[bannerIdx].desc}</p>
+                  </>
+                )}
+                <div className="flex gap-1.5 mt-2">
+                  {banners.map((_, i) => <div key={i} className={`h-1.5 rounded-full transition-all ${bannerIdx === i ? 'w-6 bg-white' : 'w-1.5 bg-white/40'}`}></div>)}
+                </div>
               </div>
             </div>
-          </div>
 
-          {status === 'Verifying' && <PaymentTimer order={tableOrder} upiId={cafeConfig.upiId} />}
-          {status === 'Pending' && <div className="bg-purple-100 border-l-4 border-purple-600 text-purple-900 p-4 rounded-2xl mb-4 shadow-sm"><p className="font-black text-lg">Order Placed!</p><p className="text-sm opacity-80">Waiting for restaurant confirmation.</p></div>}
-          {status === 'Preparing' && <div className="bg-blue-100 border-l-4 border-blue-600 text-blue-900 p-4 rounded-2xl mb-4 shadow-sm"><p className="font-black text-lg">Preparing Order 👨‍🍳</p><p className="text-sm opacity-80">Kitchen is cooking your delicious meal.</p></div>}
-          {status === 'Ready' && <div className="bg-green-100 border-l-4 border-green-600 text-green-900 p-4 rounded-2xl mb-4 shadow-sm animate-bounce"><p className="font-black text-xl">Your Order is Ready! 🎉</p><p className="text-sm opacity-80">Please pick it up from the counter.</p></div>}
-          {tableOrder && (status === 'Preparing' || status === 'Ready' || status === 'Completed') && (
-            <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 p-3 rounded-2xl mb-4 text-xs font-bold">
-              ✅ Payment Verified! Successfully paid ₹{tableOrder.total} via {tableOrder.payment}.
-            </div>
-          )}
+            {status === 'Verifying' && <PaymentTimer order={tableOrder} upiId={cafeConfig.upiId} />}
+            {status === 'Pending' && <div className="bg-purple-100 border-l-4 border-purple-600 text-purple-900 p-4 rounded-2xl mb-4 shadow-sm"><p className="font-black text-lg">Order Placed!</p><p className="text-sm opacity-80">Waiting for restaurant confirmation.</p></div>}
+            {status === 'Preparing' && <div className="bg-blue-100 border-l-4 border-blue-600 text-blue-900 p-4 rounded-2xl mb-4 shadow-sm"><p className="font-black text-lg">Preparing Order 👨‍🍳</p><p className="text-sm opacity-80">Kitchen is cooking your delicious meal.</p></div>}
+            {status === 'Ready' && <div className="bg-green-100 border-l-4 border-green-600 text-green-900 p-4 rounded-2xl mb-4 shadow-sm animate-bounce"><p className="font-black text-xl">Your Order is Ready! 🎉</p><p className="text-sm opacity-80">Please pick it up from the counter.</p></div>}
+            {tableOrder && (status === 'Preparing' || status === 'Ready' || status === 'Completed') && (
+              <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 p-3 rounded-2xl mb-4 text-xs font-bold">
+                ✅ Payment Verified! Successfully paid ₹{tableOrder.total} via {tableOrder.payment}.
+              </div>
+            )}
 
-          <div className="space-y-3 pb-24">
-            {displayedMenu.filter(i => i.stock).map(it => (
-              <div key={it.id} className="bg-white p-3 rounded-2xl shadow-sm border border-slate-200 flex gap-3">
-                <div className="w-20 h-20 bg-slate-100 rounded-xl overflow-hidden shrink-0 flex items-center justify-center">{it.img ? <img src={it.img} alt="" className="w-full h-full object-cover" /> : <ImageIcon className="w-8 h-8 text-slate-300"/>}</div>
-                <div className="flex-1 flex flex-col justify-between py-1">
-                  <div>
-                    <h3 className="font-black text-slate-900 leading-tight">{it.name}</h3>
-                    {it.desc && <p className="text-[11px] text-slate-500 font-medium leading-tight mt-0.5">{it.desc}</p>}
-                    
-                    {it.v && it.v.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 mt-2">
-                        {it.v.map((x, i) => (
-                          <button key={i} onClick={() => addVariant(it, x[0], x[1])} className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg text-xs font-bold border border-purple-200 active:scale-95 flex flex-col items-start">
-                            <span className="text-[10px] text-purple-500 uppercase">{x[0]}</span>
-                            <span>₹{x[1]}</span>
-                          </button>
-                        ))}
+            <div className="space-y-3 pb-24">
+              {displayedMenu.filter(i => i.stock).map(it => (
+                <div key={it.id} className="bg-white p-3 rounded-2xl shadow-sm border border-slate-200 flex gap-3">
+                  <div className="w-20 h-20 bg-slate-100 rounded-xl overflow-hidden shrink-0 flex items-center justify-center">{it.img ? <img src={it.img} alt="" className="w-full h-full object-cover" /> : <ImageIcon className="w-8 h-8 text-slate-300"/>}</div>
+                  <div className="flex-1 flex flex-col justify-between py-1">
+                    <div>
+                      <h3 className="font-black text-slate-900 leading-tight">{it.name}</h3>
+                      {it.desc && <p className="text-[11px] text-slate-500 font-medium leading-tight mt-0.5">{it.desc}</p>}
+                      
+                      {it.v && it.v.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          {it.v.map((x, i) => (
+                            <button key={i} onClick={() => addVariant(it, x[0], x[1])} className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg text-xs font-bold border border-purple-200 active:scale-95 flex flex-col items-start">
+                              <span className="text-[10px] text-purple-500 uppercase">{x[0]}</span>
+                              <span>₹{x[1]}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {!it.v && (
+                      <div className="flex justify-between items-end mt-1">
+                        <span className="font-black text-purple-700 text-lg">₹{it.price}</span>
+                        <button onClick={() => addSimple(it)} className="bg-purple-100 text-purple-800 px-4 py-1.5 rounded-xl text-xs font-bold active:scale-95 hover:bg-purple-200">Add +</button>
                       </div>
                     )}
                   </div>
-
-                  {!it.v && (
-                    <div className="flex justify-between items-end mt-1">
-                      <span className="font-black text-purple-700 text-lg">₹{it.price}</span>
-                      <button onClick={() => addSimple(it)} className="bg-purple-100 text-purple-800 px-4 py-1.5 rounded-xl text-xs font-bold active:scale-95 hover:bg-purple-200">Add +</button>
-                    </div>
-                  )}
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
+
+          {/* Copyright Footer in Customer View */}
+          <footer className="py-3 text-center text-slate-400 text-[10px] font-bold tracking-wider mt-4 border-t">
+            © 2026 {CAFE_NAME}. All rights reserved.
+          </footer>
         </main>
 
         {count > 0 && !checkout && (
@@ -669,7 +679,7 @@ function PaymentTimer({ order, upiId }) {
   );
 }
 
-/* ---------------- FULL ADMIN DASHBOARD WITH FIXED MOBILE LOGOUT ---------------- */
+/* ---------------- FULL ADMIN DASHBOARD WITH FIXED MOBILE LOGOUT & COPYRIGHT FOOTER ---------------- */
 function AdminDashboard(p) {
   const [tab, setTab] = useState('orders');
   
@@ -716,8 +726,8 @@ function AdminDashboard(p) {
     <div className="flex h-screen bg-slate-50 text-slate-900 overflow-hidden font-sans">
       <aside className="w-20 md:w-64 bg-purple-950 text-purple-300 flex flex-col shadow-2xl z-25 shrink-0 justify-between h-screen">
         <div>
-          <div className="p-4 md:p-6 flex items-center gap-3 border-b border-purple-900/50"><div className="bg-purple-600 p-2 rounded-xl text-white"><LayoutDashboard className="w-6 h-6"/></div><span className="font-black text-xl hidden md:block text-white">Admin Hub</span></div>
-          <nav className="py-4 space-y-1 px-2 md:px-3 overflow-y-auto max-h-[calc(100vh-140px)]">
+          <div className="p-3 md:p-5 flex items-center gap-3 border-b border-purple-900/50"><div className="bg-purple-600 p-2 rounded-xl text-white"><LayoutDashboard className="w-5 h-5"/></div><span className="font-black text-lg hidden md:block text-white">Admin Hub</span></div>
+          <nav className="py-3 space-y-1 px-2 md:px-3 overflow-y-auto max-h-[calc(100vh-130px)] scrollbar-hide">
             <SideBtn icon={<Bell/>} label="Live Orders" active={tab === 'orders'} onClick={() => { playSfx('click'); setTab('orders'); }} badge={p.activeOrders.filter(o => o.status === 'Verifying' || o.status === 'Pending').length} />
             <SideBtn icon={<Utensils/>} label="Menu Manager" active={tab === 'menu'} onClick={() => { playSfx('click'); setTab('menu'); }} />
             <SideBtn icon={<Package/>} label="Inventory" active={tab === 'inventory'} onClick={() => { playSfx('click'); setTab('inventory'); }} />
@@ -728,9 +738,9 @@ function AdminDashboard(p) {
             <SideBtn icon={<Settings/>} label="Settings" active={tab === 'settings'} onClick={() => { playSfx('click'); setTab('settings'); }} />
           </nav>
         </div>
-        <div className="p-3 md:p-4 border-t border-purple-900/50 shrink-0 bg-purple-950">
-          <button onClick={() => { playSfx('click'); p.onExit(); }} className="flex items-center justify-center md:justify-start gap-3 w-full p-2.5 md:p-3 rounded-xl bg-purple-900/80 hover:bg-red-600 text-white transition-colors">
-            <LogOut className="w-5 h-5 shrink-0"/><span className="font-bold text-xs md:text-sm hidden md:block">Logout</span>
+        <div className="p-2.5 md:p-3 border-t border-purple-900/50 shrink-0 bg-purple-950">
+          <button onClick={() => { playSfx('click'); p.onExit(); }} className="flex items-center justify-center md:justify-start gap-2.5 w-full p-2.5 rounded-xl bg-purple-900/80 hover:bg-red-600 text-white transition-colors">
+            <LogOut className="w-4 h-4 shrink-0"/><span className="font-bold text-xs md:text-sm hidden md:block">Logout</span>
           </button>
         </div>
       </aside>
@@ -744,15 +754,22 @@ function AdminDashboard(p) {
             <div className="bg-purple-100 text-purple-800 px-4 py-2.5 rounded-xl font-bold hidden md:flex items-center gap-2"><Clock className="w-4 h-4"/> {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
           </div>
         </header>
-        <div className="flex-1 overflow-y-auto p-4 md:p-6">
-          {tab === 'orders' && <OrdersBoard orders={p.activeOrders} updateStatus={updateStatus} cancelOrder={p.cancelOrder} />}
-          {tab === 'menu' && <MenuTab menuItems={p.menuItems} db={p.db} />}
-          {tab === 'inventory' && <InventoryTab stockInv={p.stockInv} iceInv={p.iceInv} db={p.db} />}
-          {tab === 'petty' && <PettyExpenseTab pettyExpenses={p.pettyExpenses} db={p.db} />}
-          {tab === 'coupons' && <CouponsTab coupons={p.coupons} categories={[...new Set(p.menuItems.map(m => m.category))]} db={p.db} />}
-          {tab === 'qr' && <QRTab logo={p.cafeConfig.logo} />}
-          {tab === 'history' && <HistoryTab history={p.orderHistory} stockInv={p.stockInv} iceInv={p.iceInv} pettyExpenses={p.pettyExpenses} menuItems={p.menuItems} db={p.db} />}
-          {tab === 'settings' && <SettingsTab cafeConfig={p.cafeConfig} db={p.db} />}
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 flex flex-col justify-between">
+          <div>
+            {tab === 'orders' && <OrdersBoard orders={p.activeOrders} updateStatus={updateStatus} cancelOrder={p.cancelOrder} />}
+            {tab === 'menu' && <MenuTab menuItems={p.menuItems} db={p.db} />}
+            {tab === 'inventory' && <InventoryTab stockInv={p.stockInv} iceInv={p.iceInv} db={p.db} />}
+            {tab === 'petty' && <PettyExpenseTab pettyExpenses={p.pettyExpenses} db={p.db} />}
+            {tab === 'coupons' && <CouponsTab coupons={p.coupons} categories={[...new Set(p.menuItems.map(m => m.category))]} db={p.db} />}
+            {tab === 'qr' && <QRTab logo={p.cafeConfig.logo} />}
+            {tab === 'history' && <HistoryTab history={p.orderHistory} stockInv={p.stockInv} iceInv={p.iceInv} pettyExpenses={p.pettyExpenses} menuItems={p.menuItems} db={p.db} />}
+            {tab === 'settings' && <SettingsTab cafeConfig={p.cafeConfig} db={p.db} />}
+          </div>
+
+          {/* Copyright Footer in Admin Panel */}
+          <footer className="py-3 text-center text-slate-400 text-[11px] font-bold tracking-wider mt-6 border-t">
+            © 2026 {CAFE_NAME}. All rights reserved.
+          </footer>
         </div>
       </main>
     </div>
@@ -761,7 +778,7 @@ function AdminDashboard(p) {
 
 function SideBtn({ icon, label, active, onClick, badge }) {
   return (
-    <button onClick={onClick} className={`w-full flex items-center justify-center md:justify-start gap-3 p-3 rounded-xl transition-all ${active ? 'bg-purple-700 text-white shadow-lg' : 'hover:bg-purple-900/50 hover:text-white text-purple-200'}`}>
+    <button onClick={onClick} className={`w-full flex items-center justify-center md:justify-start gap-3 p-2.5 rounded-xl transition-all ${active ? 'bg-purple-700 text-white shadow-lg' : 'hover:bg-purple-900/50 hover:text-white text-purple-200'}`}>
       <div className="relative">{icon}{badge > 0 && <span className="absolute -top-2 -right-2 bg-pink-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full md:hidden">{badge}</span>}</div>
       <span className="font-bold text-xs md:text-sm hidden md:block text-left flex-1">{label}</span>{badge > 0 && <span className="hidden md:flex bg-pink-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{badge}</span>}
     </button>
@@ -842,7 +859,7 @@ function PettyExpenseTab({ pettyExpenses, db }) {
   );
 }
 
-/* ---------------- COUPONS MANAGEMENT TAB WITH CATEGORY & FLAT / % ---------------- */
+/* ---------------- COUPONS MANAGEMENT TAB ---------------- */
 function CouponsTab({ coupons, categories, db }) {
   const [code, setCode] = useState('');
   const [type, setType] = useState('percent'); // 'percent' or 'flat'
@@ -1270,7 +1287,7 @@ function QRTab({ logo }) {
   );
 }
 
-/* ---------------- REVENUE & PROFIT/LOSS SECTION WITH PETTY EXPENSES ---------------- */
+/* ---------------- REVENUE & PROFIT/LOSS SECTION ---------------- */
 function HistoryTab({ history, stockInv, iceInv, pettyExpenses, menuItems, db }) {
   const [from, setFrom] = useState(''); const [to, setTo] = useState('');
   const rows = useMemo(() => history.filter(o => { const d = new Date(o.completedAt || o.time); const ymdStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); return (!from || ymdStr >= from) && (!to || ymdStr <= to); }), [history, from, to]);
@@ -1287,7 +1304,7 @@ function HistoryTab({ history, stockInv, iceInv, pettyExpenses, menuItems, db })
   const dlCsv = () => {
     playSfx('save');
     let c = 'ID,Table,Customer Name,Phone,Date,Time,Payment,Total,Items\n' + rows.map(o => { const d = new Date(o.completedAt || o.time); return `${o.id},${o.table},"${o.customerName || ''}",${o.customerPhone || ''},${d.toLocaleDateString()},${d.toLocaleTimeString()},${o.payment},${o.total},"${o.items.map(i => `${i.qty}x${i.name}`).join('; ')}"`; }).join('\n');
-    c += `\n,,,,,,TOTAL REVENUE,${totalRevenue},\n,,,,,,TOTAL EXPENSE,${totalExpense},\n,,,,,,NET PROFIT/LOSS,${netProfitLoss},`;
+    c += `\n,,,,,,TOTAL REVENUE,${totalRevenue},\n,,,,,,EXPENSE,${totalExpense},\n,,,,,,NET PROFIT,${netProfitLoss},`;
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([c], { type: 'text/csv' })); a.download = `financial_report_${from || 'all'}_${to || 'all'}.csv`; a.click();
   };
 
