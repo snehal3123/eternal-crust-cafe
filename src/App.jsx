@@ -307,7 +307,7 @@ function DelBtn({ onDel }) {
   return <button onClick={() => { playSfx('click'); if (a) onDel(); else setA(true); }} className={`p-2 rounded-xl transition-colors text-xs font-black shrink-0 ${a ? 'bg-red-600 text-white' : 'bg-slate-50 text-slate-400 hover:text-red-600 hover:bg-red-50'}`}>{a ? 'Sure?' : <Trash2 className="w-4 h-4"/>}</button>;
 }
 
-/* ---------------- LANDING VIEW WITH PERFECT FITTING & COPYRIGHT ---------------- */
+/* ---------------- LANDING VIEW WITH COPYRIGHT & MADE WITH LOVE ---------------- */
 function LandingView({ tables, activeOrders, logo, onJoin, onAdminLogin }) {
   const [showLogin, setShowLogin] = useState(false);
   const [wi, setWi] = useState(0);
@@ -369,9 +369,10 @@ function LandingView({ tables, activeOrders, logo, onJoin, onAdminLogin }) {
         </div>
       </div>
 
-      {/* Footer with Copyright */}
-      <footer className="py-2 text-center text-purple-300/60 text-[10px] font-bold tracking-wider shrink-0">
-        © 2026 {CAFE_NAME}. All rights reserved.
+      {/* Footer with Copyright and Made with love */}
+      <footer className="py-2 text-center text-purple-300/70 text-[10px] font-bold tracking-wider shrink-0 space-y-0.5">
+        <div>© 2026 {CAFE_NAME}. All rights reserved.</div>
+        <div className="text-purple-200 flex items-center justify-center gap-1">Made with love ❤️</div>
       </footer>
 
       {showModal && (
@@ -403,7 +404,7 @@ function AdminLoginModal({ onClose, onSuccess }) {
   );
 }
 
-/* ---------------- CUSTOMER VIEW WITH COPYRIGHT FOOTER ---------------- */
+/* ---------------- CUSTOMER VIEW WITH TOGGLE COUPONS & FOOTER ---------------- */
 function CustomerView({ tableNumber, customerName, customerPhone, menuItems, activeOrders, coupons, cafeConfig, onPlaceOrder, onExit }) {
   const [cart, setCart] = useState([]); 
   const [checkout, setCheckout] = useState(false);
@@ -474,12 +475,32 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
 
   const chg = (k, d) => { playSfx(d > 0 ? 'add' : 'remove'); setCart(p => p.map(c => c.key === k ? { ...c, qty: c.qty + d } : c).filter(c => c.qty > 0)); };
 
-  const applyCoupon = (c) => { playSfx('click'); setSelectedCoupon(c); setCouponError(''); };
+  // Toggle Coupon: click to apply, click again to remove
+  const applyCoupon = (c) => {
+    playSfx('click');
+    if (selectedCoupon?.id === c.id) {
+      setSelectedCoupon(null);
+    } else {
+      setSelectedCoupon(c);
+      setCouponError('');
+    }
+  };
 
   const verifyCouponCode = () => {
     const found = coupons.find(c => c.code.toLowerCase() === couponCodeInput.trim().toLowerCase());
-    if (found) { playSfx('success'); setSelectedCoupon(found); setCouponError(''); }
-    else { playSfx('error'); setCouponError('Invalid Coupon Code'); }
+    if (found) {
+      playSfx('success');
+      if (selectedCoupon?.id === found.id) {
+        setSelectedCoupon(null);
+      } else {
+        setSelectedCoupon(found);
+      }
+      setCouponError('');
+      setCouponCodeInput('');
+    } else {
+      playSfx('error');
+      setCouponError('Invalid Coupon Code');
+    }
   };
 
   const displayedMenu = useMemo(() => {
@@ -606,8 +627,9 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
             </div>
           </div>
 
-          <footer className="py-3 text-center text-slate-400 text-[10px] font-bold tracking-wider mt-4 border-t">
-            © 2026 {CAFE_NAME}. All rights reserved.
+          <footer className="py-3 text-center text-slate-400 text-[10px] font-bold tracking-wider mt-4 border-t space-y-0.5">
+            <div>© 2026 {CAFE_NAME}. All rights reserved.</div>
+            <div className="text-slate-500 flex items-center justify-center gap-1">Made with love ❤️</div>
           </footer>
         </main>
 
@@ -631,12 +653,12 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
               </div>
 
               <div className="mb-5">
-                <p className="font-bold text-slate-500 text-xs mb-2 uppercase tracking-widest flex items-center gap-1"><Tag className="w-3.5 h-3.5"/> Available Coupons / Offers</p>
+                <p className="font-bold text-slate-500 text-xs mb-2 uppercase tracking-widest flex items-center gap-1"><Tag className="w-3.5 h-3.5"/> Available Coupons / Offers (Click to Apply/Remove)</p>
                 {coupons.length > 0 ? (
                   <div className="flex flex-wrap gap-2 mb-3">
                     {coupons.map(c => (
-                      <button key={c.id} onClick={() => applyCoupon(c)} className={`px-3 py-2 rounded-xl text-xs font-bold border flex items-center gap-2 ${selectedCoupon?.id === c.id ? 'bg-purple-700 text-white border-purple-700' : 'bg-purple-50 text-purple-700 border-purple-200'}`}>
-                        <span>{c.code} ({c.type === 'flat' ? `₹${c.value} OFF` : `${c.value}% OFF`}) {c.category && c.category !== 'All' ? `[${c.category}]` : ''}</span>
+                      <button key={c.id} onClick={() => applyCoupon(c)} className={`px-3 py-2 rounded-xl text-xs font-bold border flex items-center gap-2 transition-all ${selectedCoupon?.id === c.id ? 'bg-purple-700 text-white border-purple-700 shadow-md ring-2 ring-purple-300' : 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100'}`}>
+                        <span>{c.code} ({c.type === 'flat' ? `₹${c.value} OFF` : `${c.value}% OFF`}) {c.category && c.category !== 'All' ? `[${c.category}]` : ''} {selectedCoupon?.id === c.id ? '✓' : ''}</span>
                       </button>
                     ))}
                   </div>
@@ -678,7 +700,7 @@ function PaymentTimer({ order, upiId }) {
   );
 }
 
-/* ---------------- FULL ADMIN DASHBOARD WITH COPYRIGHT ---------------- */
+/* ---------------- FULL ADMIN DASHBOARD ---------------- */
 function AdminDashboard(p) {
   const [tab, setTab] = useState('orders');
   
@@ -765,8 +787,9 @@ function AdminDashboard(p) {
             {tab === 'settings' && <SettingsTab cafeConfig={p.cafeConfig} db={p.db} />}
           </div>
 
-          <footer className="py-3 text-center text-slate-400 text-[11px] font-bold tracking-wider mt-6 border-t">
-            © 2026 {CAFE_NAME}. All rights reserved.
+          <footer className="py-3 text-center text-slate-400 text-[11px] font-bold tracking-wider mt-6 border-t space-y-0.5">
+            <div>© 2026 {CAFE_NAME}. All rights reserved.</div>
+            <div className="text-slate-500 flex items-center justify-center gap-1">Made with love ❤️</div>
           </footer>
         </div>
       </main>
@@ -1444,10 +1467,10 @@ function SettingsTab({ cafeConfig, db }) {
         </div>
 
         {/* Banner 3 */}
-        <div className="bg-slate-50 p-4 rounded-2xl border space-y-3">
+        <div className="bg-slate-50 p-4 rounded-2xl value-3 space-y-3">
           <p className="font-black text-purple-900 text-sm">Banner 3</p>
           <div><label className="text-[10px] font-bold text-slate-500 uppercase">Title</label><input type="text" value={b3Title} onChange={e => setB3Title(e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
-          <div><label className="text-[10px] font-bold text-slate-500 uppercase">Description</label><input type="text" value={b3Desc} onChange={e => setB3Desc(e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
+          <div><label className="text-xs font-bold text-slate-500 uppercase">Description</label><input type="text" value={b3Desc} onChange={e => setB3Desc(e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
           <div className="flex items-center gap-3">
             <input type="file" accept="image/*" onChange={async e => { if(e.target.files[0]) setB3Img(await readImg(e.target.files[0])); }} className="w-full text-xs" />
             {b3Img && <button type="button" onClick={() => setB3Img('')} className="bg-red-100 text-red-600 px-3 py-1.5 rounded-xl text-xs font-bold shrink-0">Remove Image</button>}
