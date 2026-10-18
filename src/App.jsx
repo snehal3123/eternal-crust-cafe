@@ -307,7 +307,7 @@ function DelBtn({ onDel }) {
   return <button onClick={() => { playSfx('click'); if (a) onDel(); else setA(true); }} className={`p-2 rounded-xl transition-colors text-xs font-black shrink-0 ${a ? 'bg-red-600 text-white' : 'bg-slate-50 text-slate-400 hover:text-red-600 hover:bg-red-50'}`}>{a ? 'Sure?' : <Trash2 className="w-4 h-4"/>}</button>;
 }
 
-/* ---------------- LANDING VIEW WITH 100M GEOFENCING CHECK ---------------- */
+/* ---------------- LANDING VIEW WITH 100M GEOFENCING ---------------- */
 function LandingView({ tables, activeOrders, logo, cafeConfig, onJoin, onAdminLogin }) {
   const [showLogin, setShowLogin] = useState(false);
   const [wi, setWi] = useState(0);
@@ -325,7 +325,7 @@ function LandingView({ tables, activeOrders, logo, cafeConfig, onJoin, onAdminLo
   const isBooked = activeOrders.some(o => o.table === String(currentTable.name) && o.status !== 'Completed');
 
   const calculateDistance = (lat1, lon1, lat2, lon2) => {
-    const R = 6371e3; // metres
+    const R = 6371e3;
     const φ1 = (lat1 * Math.PI) / 180;
     const φ2 = (lat2 * Math.PI) / 180;
     const Δφ = ((lat2 - lat1) * Math.PI) / 180;
@@ -333,7 +333,7 @@ function LandingView({ tables, activeOrders, logo, cafeConfig, onJoin, onAdminLo
 
     const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c; // in metres
+    return R * c;
   };
 
   const handleJoinClick = () => {
@@ -355,7 +355,7 @@ function LandingView({ tables, activeOrders, logo, cafeConfig, onJoin, onAdminLo
         const userLng = position.coords.longitude;
         const cafeLat = cafeConfig.lat || 19.2183;
         const cafeLng = cafeConfig.lng || 73.1633;
-        const allowedRadius = cafeConfig.radius || 100; // 100 meters
+        const allowedRadius = cafeConfig.radius || 100;
 
         const dist = calculateDistance(userLat, userLng, cafeLat, cafeLng);
         if (dist <= allowedRadius) {
@@ -467,7 +467,7 @@ function AdminLoginModal({ onClose, onSuccess }) {
   );
 }
 
-/* ---------------- CUSTOMER VIEW WITH COPYRIGHT & MADE WITH LOVE ---------------- */
+/* ---------------- CUSTOMER VIEW WITH COPYRIGHT ---------------- */
 function CustomerView({ tableNumber, customerName, customerPhone, menuItems, activeOrders, coupons, cafeConfig, onPlaceOrder, onExit }) {
   const [cart, setCart] = useState([]); 
   const [checkout, setCheckout] = useState(false);
@@ -1445,6 +1445,10 @@ function HistoryTab({ history, stockInv, iceInv, pettyExpenses, menuItems, db })
 function SettingsTab({ cafeConfig, db }) {
   const fileRef = useRef(null);
   const [upi, setUpi] = useState(cafeConfig.upiId || 'snehaltitkare58-2@okicici');
+  const [lat, setLat] = useState(cafeConfig.lat ?? 19.2183);
+  const [lng, setLng] = useState(cafeConfig.lng ?? 73.1633);
+  const [radius, setRadius] = useState(cafeConfig.radius ?? 100);
+
   const [b1Title, setB1Title] = useState(cafeConfig.banners?.[0]?.title || 'More Cheese. More Happiness.');
   const [b1Desc, setB1Desc] = useState(cafeConfig.banners?.[0]?.desc || 'Hot, cheesy and baked with love, just for you.');
   const [b1Img, setB1Img] = useState(cafeConfig.banners?.[0]?.img || '');
@@ -1464,82 +1468,70 @@ function SettingsTab({ cafeConfig, db }) {
     await setDoc(doc(db, 'settings', 'config'), { ...cafeConfig, logo: url });
   };
 
-  const saveUpi = async (e) => {
+  const saveSettings = async (e) => {
     e.preventDefault();
-    playSfx('save');
-    await setDoc(doc(db, 'settings', 'config'), { ...cafeConfig, upiId: upi.trim() });
-    alert('UPI ID updated successfully!');
-  };
-
-  const saveBanners = async () => {
     playSfx('save');
     const banners = [
       { title: b1Title, desc: b1Desc, bg: "from-purple-900 to-indigo-900", img: b1Img },
       { title: b2Title, desc: b2Desc, bg: "from-indigo-900 to-purple-950", img: b2Img },
       { title: b3Title, desc: b3Desc, bg: "from-purple-950 to-purple-900", img: b3Img }
     ];
-    await setDoc(doc(db, 'settings', 'config'), { ...cafeConfig, banners });
-    alert('Banners updated successfully!');
+    await setDoc(doc(db, 'settings', 'config'), { 
+      ...cafeConfig, 
+      upiId: upi.trim(),
+      lat: Number(lat),
+      lng: Number(lng),
+      radius: Number(radius),
+      banners 
+    });
+    alert('Settings & Location saved successfully!');
   };
 
   return (
     <div className="space-y-6 max-w-xl">
       <div className="bg-white rounded-3xl border border-slate-200 p-8">
-        <h2 className="text-2xl font-black text-slate-900 mb-6">Payment Settings (UPI ID)</h2>
-        <form onSubmit={saveUpi} className="space-y-4">
+        <h2 className="text-2xl font-black text-slate-900 mb-6">Cafe Geofence Location (100m Restriction)</h2>
+        <form onSubmit={saveSettings} className="space-y-4">
+          <div><label className="text-xs font-bold text-slate-500 uppercase">Cafe Latitude</label><input type="number" step="any" value={lat} onChange={e => setLat(e.target.value)} className={inpStyle} required /></div>
+          <div><label className="text-xs font-bold text-slate-500 uppercase">Cafe Longitude</label><input type="number" step="any" value={lng} onChange={e => setLng(e.target.value)} className={inpStyle} required /></div>
+          <div><label className="text-xs font-bold text-slate-500 uppercase">Allowed Radius (Meters)</label><input type="number" value={radius} onChange={e => setRadius(e.target.value)} className={inpStyle} required /></div>
           <div><label className="text-xs font-bold text-slate-500 uppercase">Cafe UPI ID</label><input type="text" value={upi} onChange={e => setUpi(e.target.value)} placeholder="e.g. yourname@okicici" className={inpStyle} required /></div>
-          <button type="submit" className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-3 rounded-xl">Save UPI ID</button>
+          
+          <div className="pt-4 border-t">
+            <h2 className="text-xl font-black text-slate-900 mb-4">Café Logo</h2>
+            <div className="flex flex-col items-center bg-slate-50 p-6 rounded-3xl border-2 border-dashed border-slate-200 mb-4">
+              <div className="w-24 h-24 bg-white rounded-full shadow-lg flex items-center justify-center overflow-hidden mb-5 border-4 border-purple-100">
+                {cafeConfig.logo ? <img src={cafeConfig.logo} alt="Logo" className="w-full h-full object-cover"/> : <Coffee className="w-10 h-10 text-purple-300"/>}
+              </div>
+              <input ref={logoRef} type="file" accept="image/*" className="hidden" onChange={async (e) => { if (e.target.files[0]) saveLogo(await readImg(e.target.files[0])); }} />
+              <button type="button" onClick={() => { playSfx('click'); logoRef.current.click(); }} className="bg-purple-700 hover:bg-purple-800 text-white font-bold px-5 py-2.5 rounded-xl flex items-center gap-2 shadow-md text-sm"><Upload className="w-4 h-4"/> Upload Logo</button>
+            </div>
+          </div>
+
+          <div className="pt-4 border-t space-y-4">
+            <h2 className="text-xl font-black text-slate-900">Manage 3 Banners</h2>
+            <div className="bg-slate-50 p-4 rounded-2xl border space-y-3">
+              <p className="font-black text-purple-900 text-sm">Banner 1</p>
+              <div><label className="text-[10px] font-bold text-slate-500 uppercase">Title</label><input type="text" value={b1Title} onChange={e => setB1Title(e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
+              <div><label className="text-[10px] font-bold text-slate-500 uppercase">Description</label><input type="text" value={b1Desc} onChange={e => setB1Desc(e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
+              <div className="flex items-center gap-3"><input type="file" accept="image/*" onChange={async e => { if(e.target.files[0]) setB1Img(await readImg(e.target.files[0])); }} className="w-full text-xs" />{b1Img && <button type="button" onClick={() => setB1Img('')} className="bg-red-100 text-red-600 px-3 py-1.5 rounded-xl text-xs font-bold shrink-0">Remove</button>}</div>
+            </div>
+            <div className="bg-slate-50 p-4 rounded-2xl border space-y-3">
+              <p className="font-black text-purple-900 text-sm">Banner 2</p>
+              <div><label className="text-[10px] font-bold text-slate-500 uppercase">Title</label><input type="text" value={b2Title} onChange={e => setB2Title(e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
+              <div><label className="text-[10px] font-bold text-slate-500 uppercase">Description</label><input type="text" value={b2Desc} onChange={e => setB2Desc(e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
+              <div className="flex items-center gap-3"><input type="file" accept="image/*" onChange={async e => { if(e.target.files[0]) setB2Img(await readImg(e.target.files[0])); }} className="w-full text-xs" />{b2Img && <button type="button" onClick={() => setB2Img('')} className="bg-red-100 text-red-600 px-3 py-1.5 rounded-xl text-xs font-bold shrink-0">Remove</button>}</div>
+            </div>
+            <div className="bg-slate-50 p-4 rounded-2xl border space-y-3">
+              <p className="font-black text-purple-900 text-sm">Banner 3</p>
+              <div><label className="text-[10px] font-bold text-slate-500 uppercase">Title</label><input type="text" value={b3Title} onChange={e => setB3Title(e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
+              <div><label className="text-[10px] font-bold text-slate-500 uppercase">Description</label><input type="text" value={b3Desc} onChange={e => setB3Desc(e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
+              <div className="flex items-center gap-3"><input type="file" accept="image/*" onChange={async e => { if(e.target.files[0]) setB3Img(await readImg(e.target.files[0])); }} className="w-full text-xs" />{b3Img && <button type="button" onClick={() => setB3Img('')} className="bg-red-100 text-red-600 px-3 py-1.5 rounded-xl text-xs font-bold shrink-0">Remove</button>}</div>
+            </div>
+          </div>
+
+          <button type="submit" className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-4 rounded-xl mt-4">Save All Settings</button>
         </form>
-      </div>
-
-      <div className="bg-white rounded-3xl border border-slate-200 p-8">
-        <h2 className="text-2xl font-black text-slate-900 mb-6">Café Logo</h2>
-        <div className="flex flex-col items-center bg-slate-50 p-6 rounded-3xl border-2 border-dashed border-slate-200">
-          <div className="w-24 h-24 bg-white rounded-full shadow-lg flex items-center justify-center overflow-hidden mb-5 border-4 border-purple-100">
-            {cafeConfig.logo ? <img src={cafeConfig.logo} alt="Logo" className="w-full h-full object-cover"/> : <Coffee className="w-10 h-10 text-purple-300"/>}
-          </div>
-          <input ref={logoRef} type="file" accept="image/*" className="hidden" onChange={async (e) => { if (e.target.files[0]) saveLogo(await readImg(e.target.files[0])); }} />
-          <button onClick={() => { playSfx('click'); logoRef.current.click(); }} className="bg-purple-700 hover:bg-purple-800 text-white font-bold px-5 py-2.5 rounded-xl flex items-center gap-2 shadow-md text-sm"><Upload className="w-4 h-4"/> Upload Logo</button>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-3xl border border-slate-200 p-8 space-y-6">
-        <h2 className="text-2xl font-black text-slate-900">Manage 3 Banners (Text & Images)</h2>
-        
-        {/* Banner 1 */}
-        <div className="bg-slate-50 p-4 rounded-2xl border space-y-3">
-          <p className="font-black text-purple-900 text-sm">Banner 1</p>
-          <div><label className="text-[10px] font-bold text-slate-500 uppercase">Title</label><input type="text" value={b1Title} onChange={e => setB1Title(e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
-          <div><label className="text-[10px] font-bold text-slate-500 uppercase">Description</label><input type="text" value={b1Desc} onChange={e => setB1Desc(e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
-          <div className="flex items-center gap-3">
-            <input type="file" accept="image/*" onChange={async e => { if(e.target.files[0]) setB1Img(await readImg(e.target.files[0])); }} className="w-full text-xs" />
-            {b1Img && <button type="button" onClick={() => setB1Img('')} className="bg-red-100 text-red-600 px-3 py-1.5 rounded-xl text-xs font-bold shrink-0">Remove Image</button>}
-          </div>
-        </div>
-
-        {/* Banner 2 */}
-        <div className="bg-slate-50 p-4 rounded-2xl border space-y-3">
-          <p className="font-black text-purple-900 text-sm">Banner 2</p>
-          <div><label className="text-[10px] font-bold text-slate-500 uppercase">Title</label><input type="text" value={b2Title} onChange={e => setB2Title(e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
-          <div><label className="text-[10px] font-bold text-slate-500 uppercase">Description</label><input type="text" value={b2Desc} onChange={e => setB2Desc(e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
-          <div className="flex items-center gap-3">
-            <input type="file" accept="image/*" onChange={async e => { if(e.target.files[0]) setB2Img(await readImg(e.target.files[0])); }} className="w-full text-xs" />
-            {b2Img && <button type="button" onClick={() => setB2Img('')} className="bg-red-100 text-red-600 px-3 py-1.5 rounded-xl text-xs font-bold shrink-0">Remove Image</button>}
-          </div>
-        </div>
-
-        {/* Banner 3 */}
-        <div className="bg-slate-50 p-4 rounded-2xl border space-y-3">
-          <p className="font-black text-purple-900 text-sm">Banner 3</p>
-          <div><label className="text-[10px] font-bold text-slate-500 uppercase">Title</label><input type="text" value={b3Title} onChange={e => setB3Title(e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
-          <div><label className="text-[10px] font-bold text-slate-500 uppercase">Description</label><input type="text" value={b3Desc} onChange={e => setB3Desc(e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
-          <div className="flex items-center gap-3">
-            <input type="file" accept="image/*" onChange={async e => { if(e.target.files[0]) setB3Img(await readImg(e.target.files[0])); }} className="w-full text-xs" />
-            {b3Img && <button type="button" onClick={() => setB3Img('')} className="bg-red-100 text-red-600 px-3 py-1.5 rounded-xl text-xs font-bold shrink-0">Remove Image</button>}
-          </div>
-        </div>
-
-        <button onClick={saveBanners} className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-3.5 rounded-xl mt-2">Save Banners & Text</button>
       </div>
     </div>
   );
