@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Coffee, Utensils, Plus, Minus, ChevronLeft, LayoutDashboard, LogOut,
   CheckCircle, Clock, ChefHat, Bell, Edit, Trash2, ToggleLeft, ToggleRight, QrCode, Printer,
-  CreditCard, Banknote, X, History, Download, Image as ImageIcon, Package, AlertTriangle, Upload, IceCream, Lock, Eye, EyeOff, Settings, Volume2, VolumeX, Mic, Search, MessageSquare, Tag, Wallet
+  CreditCard, Banknote, X, History, Download, Image as ImageIcon, Package, AlertTriangle, Upload, IceCream, Lock, Eye, EyeOff, Settings, Volume2, VolumeX, Mic, Search, MessageSquare, Tag, Wallet, MapPin
 } from 'lucide-react';
 
 /* ---------------- AUDIO & VOICE ENGINE ---------------- */
@@ -105,7 +105,7 @@ export default function App() {
   const [iceInv, setIceInv] = useState([]);
   const [pettyExpenses, setPettyExpenses] = useState([]);
   const [coupons, setCoupons] = useState([]);
-  const [cafeConfig, setCafeConfig] = useState({ logo: '', upiId: 'snehaltitkare58-2@okicici', banners: [] });
+  const [cafeConfig, setCafeConfig] = useState({ logo: '', upiId: 'snehaltitkare58-2@okicici', banners: [], lat: 19.2183, lng: 73.1633, radius: 100 });
 
   useEffect(() => {
     const checkReminder = () => {
@@ -282,7 +282,7 @@ ${discountLine}*Total : ₹${o.total}*
 
   return (
     <div className="min-h-screen bg-purple-950 font-sans text-slate-100 selection:bg-purple-500 overflow-hidden">
-      {mode === 'landing' && <LandingView tables={tables} activeOrders={activeOrders} logo={cafeConfig.logo} onJoin={joinTable} onAdminLogin={adminLoginSuccess} />}
+      {mode === 'landing' && <LandingView tables={tables} activeOrders={activeOrders} logo={cafeConfig.logo} cafeConfig={cafeConfig} onJoin={joinTable} onAdminLogin={adminLoginSuccess} />}
       {mode === 'customer' && <CustomerView tableNumber={table} customerName={customerName} customerPhone={customerPhone} menuItems={menuItems} activeOrders={activeOrders} coupons={coupons} cafeConfig={cafeConfig} onPlaceOrder={placeOrder} onExit={exitTable} />}
       {mode === 'admin' && isAdminAuth && <AdminDashboard {...{ activeOrders, setActiveOrders, orderHistory, setOrderHistory, completeOrder, cancelOrder, menuItems, setMenuItems, tables, setTables, stockInv, setStockInv, iceInv, setIceInv, pettyExpenses, setPettyExpenses, coupons, setCoupons, cafeConfig, db }} onExit={adminLogout} />}
     </div>
@@ -307,13 +307,15 @@ function DelBtn({ onDel }) {
   return <button onClick={() => { playSfx('click'); if (a) onDel(); else setA(true); }} className={`p-2 rounded-xl transition-colors text-xs font-black shrink-0 ${a ? 'bg-red-600 text-white' : 'bg-slate-50 text-slate-400 hover:text-red-600 hover:bg-red-50'}`}>{a ? 'Sure?' : <Trash2 className="w-4 h-4"/>}</button>;
 }
 
-/* ---------------- LANDING VIEW WITH COPYRIGHT & MADE WITH LOVE ---------------- */
-function LandingView({ tables, activeOrders, logo, onJoin, onAdminLogin }) {
+/* ---------------- LANDING VIEW WITH 100M GEOFENCING CHECK ---------------- */
+function LandingView({ tables, activeOrders, logo, cafeConfig, onJoin, onAdminLogin }) {
   const [showLogin, setShowLogin] = useState(false);
   const [wi, setWi] = useState(0);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [locError, setLocError] = useState('');
+  const [checkingLoc, setCheckingLoc] = useState(false);
 
   const sortedTables = useMemo(() => {
     return [...tables].sort((a, b) => (parseInt(a.name) || 0) - (parseInt(b.name) || 0));
@@ -322,9 +324,59 @@ function LandingView({ tables, activeOrders, logo, onJoin, onAdminLogin }) {
   const currentTable = sortedTables[wi] || { name: '1' };
   const isBooked = activeOrders.some(o => o.table === String(currentTable.name) && o.status !== 'Completed');
 
-  const handleJoinClick = () => { playSfx('click'); setShowModal(true); };
+  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371e3; // metres
+    const φ1 = (lat1 * Math.PI) / 180;
+    const φ2 = (lat2 * Math.PI) / 180;
+    const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+    const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c; // in metres
+  };
+
+  const handleJoinClick = () => {
+    playSfx('click');
+    setLocError('');
+    setCheckingLoc(true);
+
+    if (!navigator.geolocation) {
+      setCheckingLoc(false);
+      setLocError('Geolocation is not supported by your browser.');
+      setShowModal(true);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setCheckingLoc(false);
+        const userLat = position.coords.latitude;
+        const userLng = position.coords.longitude;
+        const cafeLat = cafeConfig.lat || 19.2183;
+        const cafeLng = cafeConfig.lng || 73.1633;
+        const allowedRadius = cafeConfig.radius || 100; // 100 meters
+
+        const dist = calculateDistance(userLat, userLng, cafeLat, cafeLng);
+        if (dist <= allowedRadius) {
+          setShowModal(true);
+        } else {
+          setLocError(`You are outside the café premises! (${Math.round(dist)}m away). You must be within ${allowedRadius}m to order.`);
+          setShowModal(true);
+        }
+      },
+      (error) => {
+        setCheckingLoc(false);
+        setLocError('Location permission denied or unavailable. Please enable GPS to access the cafe menu.');
+        setShowModal(true);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
+
   const handleProceed = (e) => {
     e.preventDefault();
+    if (locError && locError.includes('outside')) return;
     if (!name.trim() || !phone.trim() || phone.length < 10) return playSfx('error');
     playSfx('success');
     onJoin(currentTable.name, name.trim(), phone.trim());
@@ -360,16 +412,16 @@ function LandingView({ tables, activeOrders, logo, onJoin, onAdminLogin }) {
           ) : null}
 
           <button 
-            disabled={isBooked}
+            disabled={isBooked || checkingLoc}
             onClick={handleJoinClick} 
-            className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-40 text-white font-black text-lg py-3.5 rounded-full shadow-[0_8px_25px_rgba(147,51,234,0.4)] active:scale-95 transition-all"
+            className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-40 text-white font-black text-lg py-3.5 rounded-full shadow-[0_8px_25px_rgba(147,51,234,0.4)] active:scale-95 transition-all flex items-center justify-center gap-2"
           >
-            {isBooked ? 'Already Booked' : 'JOIN TABLE'}
+            {checkingLoc ? <Clock className="w-5 h-5 animate-spin" /> : null}
+            {checkingLoc ? 'Checking Location...' : (isBooked ? 'Already Booked' : 'JOIN TABLE')}
           </button>
         </div>
       </div>
 
-      {/* Footer with Copyright and Made with love */}
       <footer className="py-2 text-center text-purple-300/70 text-[10px] font-bold tracking-wider shrink-0 space-y-0.5">
         <div>© 2026 {CAFE_NAME}. All rights reserved.</div>
         <div className="text-purple-200 flex items-center justify-center gap-1">Made with love ❤️</div>
@@ -377,11 +429,22 @@ function LandingView({ tables, activeOrders, logo, onJoin, onAdminLogin }) {
 
       {showModal && (
         <Modal title={`Join Table ${currentTable.name}`} onClose={() => setShowModal(false)}>
-          <form onSubmit={handleProceed} className="space-y-4">
-            <div><label className="text-xs font-bold text-slate-500 uppercase">Your Name</label><input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Rahul Sharma" className={inpStyle} required /></div>
-            <div><label className="text-xs font-bold text-slate-500 uppercase">WhatsApp Phone Number</label><input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="e.g. 9876543210" className={inpStyle} required maxLength={10} /></div>
-            <button type="submit" className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-4 rounded-xl mt-2 shadow-lg">Start Ordering</button>
-          </form>
+          {locError ? (
+            <div className="space-y-4 text-center">
+              <div className="bg-red-50 text-red-600 p-4 rounded-2xl font-bold text-sm border border-red-200 flex flex-col items-center gap-2">
+                <MapPin className="w-8 h-8 text-red-500 animate-bounce" />
+                {locError}
+              </div>
+              <button onClick={() => setShowModal(false)} className="w-full bg-slate-800 text-white font-black py-3 rounded-xl">Close</button>
+            </div>
+          ) : (
+            <form onSubmit={handleProceed} className="space-y-4">
+              <div className="bg-emerald-50 text-emerald-800 p-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5"><MapPin className="w-4 h-4 text-emerald-600"/> Location verified successfully (Inside Cafe)</div>
+              <div><label className="text-xs font-bold text-slate-500 uppercase">Your Name</label><input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Rahul Sharma" className={inpStyle} required /></div>
+              <div><label className="text-xs font-bold text-slate-500 uppercase">WhatsApp Phone Number</label><input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="e.g. 9876543210" className={inpStyle} required maxLength={10} /></div>
+              <button type="submit" className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-4 rounded-xl mt-2 shadow-lg">Start Ordering</button>
+            </form>
+          )}
         </Modal>
       )}
 
@@ -404,7 +467,7 @@ function AdminLoginModal({ onClose, onSuccess }) {
   );
 }
 
-/* ---------------- CUSTOMER VIEW WITH TOGGLE COUPONS & FOOTER ---------------- */
+/* ---------------- CUSTOMER VIEW WITH COPYRIGHT & MADE WITH LOVE ---------------- */
 function CustomerView({ tableNumber, customerName, customerPhone, menuItems, activeOrders, coupons, cafeConfig, onPlaceOrder, onExit }) {
   const [cart, setCart] = useState([]); 
   const [checkout, setCheckout] = useState(false);
@@ -475,7 +538,6 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
 
   const chg = (k, d) => { playSfx(d > 0 ? 'add' : 'remove'); setCart(p => p.map(c => c.key === k ? { ...c, qty: c.qty + d } : c).filter(c => c.qty > 0)); };
 
-  // Toggle Coupon: click to apply, click again to remove
   const applyCoupon = (c) => {
     playSfx('click');
     if (selectedCoupon?.id === c.id) {
@@ -1467,10 +1529,10 @@ function SettingsTab({ cafeConfig, db }) {
         </div>
 
         {/* Banner 3 */}
-        <div className="bg-slate-50 p-4 rounded-2xl value-3 space-y-3">
+        <div className="bg-slate-50 p-4 rounded-2xl border space-y-3">
           <p className="font-black text-purple-900 text-sm">Banner 3</p>
           <div><label className="text-[10px] font-bold text-slate-500 uppercase">Title</label><input type="text" value={b3Title} onChange={e => setB3Title(e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
-          <div><label className="text-xs font-bold text-slate-500 uppercase">Description</label><input type="text" value={b3Desc} onChange={e => setB3Desc(e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
+          <div><label className="text-[10px] font-bold text-slate-500 uppercase">Description</label><input type="text" value={b3Desc} onChange={e => setB3Desc(e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
           <div className="flex items-center gap-3">
             <input type="file" accept="image/*" onChange={async e => { if(e.target.files[0]) setB3Img(await readImg(e.target.files[0])); }} className="w-full text-xs" />
             {b3Img && <button type="button" onClick={() => setB3Img('')} className="bg-red-100 text-red-600 px-3 py-1.5 rounded-xl text-xs font-bold shrink-0">Remove Image</button>}
