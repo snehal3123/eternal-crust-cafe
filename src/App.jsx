@@ -100,7 +100,7 @@ export default function App() {
     }
     if (localStorage.getItem('ec_admin_auth') === 'true') return 'admin';
     if (sessionTable) return 'customer';
-    return 'landing'; // Landing shows Scan QR option only
+    return 'landing';
   });
   
   const [table, setTable] = useState(() => {
@@ -257,17 +257,6 @@ ${discountLine}*Total : ₹${o.total}*
     playSfx('del');
   };
 
-  const joinTable = (tblName, name, phone) => {
-    setTable(tblName);
-    setCustomerName(name);
-    setCustomerPhone(phone);
-    setSessionTable(tblName);
-    localStorage.setItem('ec_active_table', tblName);
-    localStorage.setItem('ec_cust_name', name);
-    localStorage.setItem('ec_cust_phone', phone);
-    setMode('customer');
-  };
-
   const exitTable = () => {
     localStorage.removeItem('ec_active_table');
     localStorage.removeItem('ec_cust_name');
@@ -319,41 +308,19 @@ function DelBtn({ onDel }) {
   return <button onClick={() => { playSfx('click'); if (a) onDel(); else setA(true); }} className={`p-2 rounded-xl transition-colors text-xs font-black shrink-0 ${a ? 'bg-red-600 text-white' : 'bg-slate-50 text-slate-400 hover:text-red-600 hover:bg-red-50'}`}>{a ? 'Sure?' : <Trash2 className="w-4 h-4"/>}</button>;
 }
 
-/* ---------------- LANDING VIEW WITH ONLY QR SCAN PROMPT ---------------- */
+/* ---------------- LANDING VIEW WITH GOOGLE LENS INTEGRATION ---------------- */
 function LandingView({ logo, cafeConfig, onAdminLogin }) {
   const [showLogin, setShowLogin] = useState(false);
-  const [showScanner, setShowScanner] = useState(false);
-  const scannerRef = useRef(null);
 
-  const startScanner = () => {
+  const openGoogleLens = () => {
     playSfx('click');
-    setShowScanner(true);
-    // Dynamically load html5-qrcode for live camera scanning
-    import('https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js').then(() => {
-      const scanner = new window.Html5QrcodeScanner("qr-reader", { fps: 10, qrbox: 250 });
-      scanner.render((decodedText) => {
-        try {
-          const urlObj = new URL(decodedText);
-          const tbl = urlObj.searchParams.get('table');
-          if (tbl) {
-            scanner.clear();
-            window.location.href = decodedText;
-          } else {
-            alert('Invalid Cafe QR Code');
-          }
-        } catch (e) {
-          if (decodedText.includes('table=')) {
-            window.location.href = decodedText;
-          } else {
-            alert('Scanned QR code is not valid for this cafe.');
-          }
-        }
-      }, (error) => {
-        // scanning error ignore
-      });
-    }).catch(err => {
-      alert('Camera scanner failed to load. Please use your camera app to scan the table QR directly.');
-    });
+    // Opens Google Lens / Search App scanner URL scheme or fallback web search
+    const lensUrl = "googlelens://";
+    window.location.href = lensUrl;
+    setTimeout(() => {
+      // Fallback if googlelens schema is not directly handled by browser
+      window.open("https://lens.google.com", "_blank");
+    }, 1000);
   };
 
   return (
@@ -371,13 +338,13 @@ function LandingView({ logo, cafeConfig, onAdminLogin }) {
 
         <div className="relative flex flex-col items-center justify-center bg-white/5 backdrop-blur-md p-8 rounded-[2.5rem] border border-white/10 shadow-2xl w-full text-center space-y-4">
           <QrCode className="w-16 h-16 text-purple-300 mx-auto animate-pulse" />
-          <h2 className="text-xl font-black text-white">Scan Table QR to Order</h2>
-          <p className="text-xs text-purple-200 font-medium leading-relaxed">Please scan the QR code placed on your table using your phone camera to view the menu and place your order instantly.</p>
+          <h2 className="text-xl font-black text-white">Scan Table QR with Google Lens</h2>
+          <p className="text-xs text-purple-200 font-medium leading-relaxed">Tap the button below to open Google Lens camera and scan your table QR code to automatically join your table.</p>
           <button 
-            onClick={startScanner} 
+            onClick={openGoogleLens} 
             className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-base py-4 rounded-full shadow-[0_8px_25px_rgba(147,51,234,0.4)] active:scale-95 transition-all flex items-center justify-center gap-2"
           >
-            <Camera className="w-5 h-5" /> Open Camera Scanner
+            <Camera className="w-5 h-5" /> Open Google Lens Camera
           </button>
         </div>
       </div>
@@ -386,12 +353,6 @@ function LandingView({ logo, cafeConfig, onAdminLogin }) {
         <div>© 2026 {CAFE_NAME}. All rights reserved.</div>
         <div className="text-purple-200 flex items-center justify-center gap-1">Made with love ❤️</div>
       </footer>
-
-      {showScanner && (
-        <Modal title="Scan Table QR" onClose={() => setShowScanner(false)}>
-          <div id="qr-reader" className="w-full rounded-2xl overflow-hidden"></div>
-        </Modal>
-      )}
 
       {showLogin && <AdminLoginModal onClose={() => setShowLogin(false)} onSuccess={onAdminLogin} />}
     </div>
