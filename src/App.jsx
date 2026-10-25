@@ -308,22 +308,43 @@ function DelBtn({ onDel }) {
   return <button onClick={() => { playSfx('click'); if (a) onDel(); else setA(true); }} className={`p-2 rounded-xl transition-colors text-xs font-black shrink-0 ${a ? 'bg-red-600 text-white' : 'bg-slate-50 text-slate-400 hover:text-red-600 hover:bg-red-50'}`}>{a ? 'Sure?' : <Trash2 className="w-4 h-4"/>}</button>;
 }
 
-/* ---------------- LANDING VIEW WITH GOOGLE LENS INTEGRATION ---------------- */
+/* ---------------- LANDING VIEW WITH BUILT-IN QR CAMERA SCANNER ---------------- */
 function LandingView({ logo, cafeConfig, onAdminLogin }) {
   const [showLogin, setShowLogin] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
 
-  const openGoogleLens = () => {
+  const startScanner = () => {
     playSfx('click');
-    // Opens Google Lens / Google Search lens intent or Web Lens
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    if (isMobile) {
-      window.location.href = "googlelens://";
+    setShowScanner(true);
+    // Dynamically load html5-qrcode scanner for built-in camera view
+    import('https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js').then(() => {
       setTimeout(() => {
-        window.open("https://lens.google.com/", "_blank");
-      }, 500);
-    } else {
-      window.open("https://lens.google.com/", "_blank");
-    }
+        const scanner = new window.Html5QrcodeScanner("qr-reader", { fps: 10, qrbox: 250 });
+        scanner.render((decodedText) => {
+          try {
+            const urlObj = new URL(decodedText);
+            const tbl = urlObj.searchParams.get('table');
+            if (tbl) {
+              scanner.clear();
+              window.location.href = decodedText;
+            } else {
+              alert('Invalid Cafe QR Code');
+            }
+          } catch (e) {
+            if (decodedText.includes('table=')) {
+              scanner.clear();
+              window.location.href = decodedText;
+            } else {
+              alert('Scanned QR code is not valid for this cafe.');
+            }
+          }
+        }, (error) => {
+          // scanning error ignore
+        });
+      }, 200);
+    }).catch(err => {
+      alert('Camera scanner failed to load. Please check camera permissions.');
+    });
   };
 
   return (
@@ -341,13 +362,13 @@ function LandingView({ logo, cafeConfig, onAdminLogin }) {
 
         <div className="relative flex flex-col items-center justify-center bg-white/5 backdrop-blur-md p-8 rounded-[2.5rem] border border-white/10 shadow-2xl w-full text-center space-y-4">
           <QrCode className="w-16 h-16 text-purple-300 mx-auto animate-pulse" />
-          <h2 className="text-xl font-black text-white">Scan Table QR with Google Lens</h2>
-          <p className="text-xs text-purple-200 font-medium leading-relaxed">Click below to open Google Lens camera to scan your table QR code instantly.</p>
+          <h2 className="text-xl font-black text-white">Scan Table QR to Order</h2>
+          <p className="text-xs text-purple-200 font-medium leading-relaxed">Click below to open the camera scanner and scan your table QR code.</p>
           <button 
-            onClick={openGoogleLens} 
+            onClick={startScanner} 
             className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-base py-4 rounded-full shadow-[0_8px_25px_rgba(147,51,234,0.4)] active:scale-95 transition-all flex items-center justify-center gap-2"
           >
-            <Camera className="w-5 h-5" /> Open Google Lens Camera
+            <Camera className="w-5 h-5" /> Scan Table QR
           </button>
         </div>
       </div>
@@ -356,6 +377,12 @@ function LandingView({ logo, cafeConfig, onAdminLogin }) {
         <div>© 2026 {CAFE_NAME}. All rights reserved.</div>
         <div className="text-purple-200 flex items-center justify-center gap-1">Made with love ❤️</div>
       </footer>
+
+      {showScanner && (
+        <Modal title="Scan Table QR" onClose={() => setShowScanner(false)}>
+          <div id="qr-reader" className="w-full rounded-2xl overflow-hidden bg-slate-100 min-h-[300px]"></div>
+        </Modal>
+      )}
 
       {showLogin && <AdminLoginModal onClose={() => setShowLogin(false)} onSuccess={onAdminLogin} />}
     </div>
@@ -1486,7 +1513,7 @@ function SettingsTab({ cafeConfig, db }) {
                 <p className="font-black text-purple-900 text-sm">Banner {idx + 1}</p>
                 <div><label className="text-[10px] font-bold text-slate-500 uppercase">Title</label><input type="text" value={b.title} onChange={e => updateBannerField(idx, 'title', e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
                 <div><label className="text-[10px] font-bold text-slate-500 uppercase">Description</label><input type="text" value={b.desc} onChange={e => updateBannerField(idx, 'desc', e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
-                <div className="flex items-center gap-3"><input type="file" accept="image/*" onChange={async e => { if(e.target.files[0]) updateBannerField(idx, 'img', await readImg(e.target.files[0])); }} className="w-full text-xs" />{b.img && <button type="button" onClick={() => updateBannerField(idx, 'img', '')} className="bg-red-100 text-red-600 px-3 py-1.5 rounded-xl text-xs font-bold shrink-0">Remove Image</button>}</div>
+                <div className="flex items-center gap-3"><input type="file" accept="updateBannerField(idx, 'img', ...)" onChange={async e => { if(e.target.files[0]) updateBannerField(idx, 'img', await readImg(e.target.files[0])); }} className="w-full text-xs" />{b.img && <button type="button" onClick={() => updateBannerField(idx, 'img', '')} className="bg-red-100 text-red-600 px-3 py-1.5 rounded-xl text-xs font-bold shrink-0">Remove Image</button>}</div>
               </div>
             ))}
           </div>
