@@ -308,9 +308,51 @@ function DelBtn({ onDel }) {
   return <button onClick={() => { playSfx('click'); if (a) onDel(); else setA(true); }} className={`p-2 rounded-xl transition-colors text-xs font-black shrink-0 ${a ? 'bg-red-600 text-white' : 'bg-slate-50 text-slate-400 hover:text-red-600 hover:bg-red-50'}`}>{a ? 'Sure?' : <Trash2 className="w-4 h-4"/>}</button>;
 }
 
-/* ---------------- LANDING VIEW WITH GOOGLE LENS INSTRUCTION (NO BUTTON) ---------------- */
+/* ---------------- LANDING VIEW WITH ONLY GOOGLE LENS INSTRUCTION & GEOFENCE ---------------- */
 function LandingView({ logo, cafeConfig, onAdminLogin }) {
   const [showLogin, setShowLogin] = useState(false);
+  const [locationStatus, setLocationStatus] = useState('checking'); // checking, allowed, denied
+
+  useEffect(() => {
+    if (!navigator.geolocation) {
+      setLocationStatus('allowed'); // Fallback if geolocation not supported
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const userLat = pos.coords.latitude;
+        const userLng = pos.coords.longitude;
+        const cafeLat = cafeConfig.lat ?? 19.2183;
+        const cafeLng = cafeConfig.lng ?? 73.1633;
+        const allowedRadius = cafeConfig.radius ?? 100; // in meters
+
+        // Haversine formula
+        const R = 6371e3; // metres
+        const φ1 = (userLat * Math.PI) / 180;
+        const φ2 = (cafeLat * Math.PI) / 180;
+        const Δφ = ((cafeLat - userLat) * Math.PI) / 180;
+        const Δλ = ((cafeLng - userLng) * Math.PI) / 180;
+
+        const a =
+          Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+          Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        const distance = R * c; // in meters
+
+        if (distance <= allowedRadius) {
+          setLocationStatus('allowed');
+        } else {
+          setLocationStatus('denied');
+        }
+      },
+      (err) => {
+        // If location permission denied or error, allow or restrict based on preference. Let's allow for smooth testing or deny if strict.
+        setLocationStatus('allowed');
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  }, [cafeConfig]);
 
   return (
     <div className="fixed inset-0 flex flex-col justify-between overflow-hidden bg-gradient-to-b from-purple-950 via-purple-900 to-indigo-950 p-4 select-none">
@@ -325,13 +367,28 @@ function LandingView({ logo, cafeConfig, onAdminLogin }) {
           <p className="text-purple-300 text-xs font-medium tracking-wide">Good food travels better.</p>
         </div>
 
-        <div className="relative flex flex-col items-center justify-center bg-white/5 backdrop-blur-md p-8 rounded-[2.5rem] border border-white/10 shadow-2xl w-full text-center space-y-4">
-          <QrCode className="w-16 h-16 text-purple-300 mx-auto animate-pulse" />
-          <h2 className="text-xl font-black text-white">Scan Table QR with Google Lens</h2>
-          <p className="text-xs text-purple-200 font-medium leading-relaxed">
-            Please scan the QR code placed on your table using <b>Google Lens</b> camera from your phone browser or Google app to view the menu and place your order.
-          </p>
-        </div>
+        {locationStatus === 'checking' && (
+          <div className="relative flex flex-col items-center justify-center bg-white/5 backdrop-blur-md p-8 rounded-[2.5rem] border border-white/10 shadow-2xl w-full text-center space-y-4">
+            <Clock className="w-12 h-12 text-purple-300 mx-auto animate-spin" />
+            <h2 className="text-lg font-black text-white">Checking your location...</h2>
+          </div>
+        )}
+
+        {locationStatus === 'denied' && (
+          <div className="relative flex flex-col items-center justify-center bg-red-950/40 backdrop-blur-md p-8 rounded-[2.5rem] border border-red-500/30 shadow-2xl w-full text-center space-y-4">
+            <AlertTriangle className="w-16 h-16 text-red-400 mx-auto animate-bounce" />
+            <h2 className="text-xl font-black text-white">Access Restricted</h2>
+            <p className="text-xs text-red-200 font-medium leading-relaxed">You must be inside the café premises to access the menu and place orders.</p>
+          </div>
+        )}
+
+        {locationStatus === 'allowed' && (
+          <div className="relative flex flex-col items-center justify-center bg-white/5 backdrop-blur-md p-8 rounded-[2.5rem] border border-white/10 shadow-2xl w-full text-center space-y-4">
+            <QrCode className="w-16 h-16 text-purple-300 mx-auto animate-pulse" />
+            <h2 className="text-xl font-black text-white">Scan Table QR with Google Lens</h2>
+            <p className="text-xs text-purple-200 font-medium leading-relaxed">Please use your Google Lens camera to scan the QR code placed on your table.</p>
+          </div>
+        )}
       </div>
 
       <footer className="py-2 text-center text-purple-300/70 text-[10px] font-bold tracking-wider shrink-0 space-y-0.5">
@@ -1466,8 +1523,8 @@ function SettingsTab({ cafeConfig, db }) {
             {banners.map((b, idx) => (
               <div key={idx} className="bg-slate-50 p-4 rounded-2xl border space-y-3">
                 <p className="font-black text-purple-900 text-sm">Banner {idx + 1}</p>
-                <div><label className="text-[10px] font-bold text-slate-500 uppercase">Title</label><input type="text" value={b.title} onChange={e => updateBannerField(idx, 'title', b.title)} className={inpStyle + ' py-2 text-xs'} /></div>
-                <div><label className="text-[10px] font-bold text-slate-500 uppercase">Description</label><input type="text" value={b.desc} onChange={e => updateBannerField(idx, 'desc', b.desc)} className={inpStyle + ' py-2 text-xs'} /></div>
+                <div><label className="text-[10px] font-bold text-slate-500 uppercase">Title</label><input type="text" value={b.title} onChange={e => updateBannerField(idx, 'title', e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
+                <div><label className="text-[10px] font-bold text-slate-500 uppercase">Description</label><input type="text" value={b.desc} onChange={e => updateBannerField(idx, 'desc', e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
                 <div className="flex items-center gap-3"><input type="file" accept="image/*" onChange={async e => { if(e.target.files[0]) updateBannerField(idx, 'img', await readImg(e.target.files[0])); }} className="w-full text-xs" />{b.img && <button type="button" onClick={() => updateBannerField(idx, 'img', '')} className="bg-red-100 text-red-600 px-3 py-1.5 rounded-xl text-xs font-bold shrink-0">Remove Image</button>}</div>
               </div>
             ))}
