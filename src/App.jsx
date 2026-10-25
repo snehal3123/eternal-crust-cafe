@@ -65,7 +65,7 @@ const initialMenu = [
 
 const initialStock = [{ id: 'i1', name: 'Pizza Base', qty: 40, price: 500, min: 10 }, { id: 'i2', name: 'Burger Buns', qty: 30, price: 300, min: 10 }];
 const initialIceCream = [{ id: 'ic1', name: 'Vanilla', qty: 50, price: 400, min: 10 }, { id: 'ic2', name: 'Chocolate', qty: 30, price: 350, min: 10 }];
-const initialTables = Array.from({ length: 15 }, (_, i) => ({ id: `t${i + 1}`, name: `${i + 1}` }));
+const initialTables = Array.from({ length: 10 }, (_, i) => ({ id: `t${i + 1}`, name: `${i + 1}` }));
 
 /* ---------------- FIREBASE CONFIG ---------------- */
 import { initializeApp } from "firebase/app";
@@ -90,12 +90,24 @@ export default function App() {
   const [customerName, setCustomerName] = useState(() => localStorage.getItem('ec_cust_name') || '');
   const [customerPhone, setCustomerPhone] = useState(() => localStorage.getItem('ec_cust_phone') || '');
   const [isAdminAuth, setIsAdminAuth] = useState(() => localStorage.getItem('ec_admin_auth') === 'true');
+  
   const [mode, setMode] = useState(() => {
+    // Check URL parameters for direct table binding via QR scan e.g. ?table=1
+    const params = new URLSearchParams(window.location.search);
+    const urlTable = params.get('table');
+    if (urlTable) {
+      localStorage.setItem('ec_active_table', urlTable);
+      return 'customer';
+    }
     if (localStorage.getItem('ec_admin_auth') === 'true') return 'admin';
     if (sessionTable) return 'customer';
     return 'landing';
   });
-  const [table, setTable] = useState(sessionTable);
+  
+  const [table, setTable] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('table') || sessionTable || null;
+  });
 
   const [menuItems, setMenuItems] = useState([]);
   const [activeOrders, setActiveOrders] = useState([]);
@@ -261,6 +273,8 @@ ${discountLine}*Total : ₹${o.total}*
     localStorage.removeItem('ec_active_table');
     localStorage.removeItem('ec_cust_name');
     localStorage.removeItem('ec_cust_phone');
+    // Clear URL query parameters on exit
+    window.history.replaceState({}, document.title, window.location.pathname);
     setSessionTable(null);
     setCustomerName('');
     setCustomerPhone('');
@@ -467,7 +481,7 @@ function AdminLoginModal({ onClose, onSuccess }) {
   );
 }
 
-/* ---------------- CUSTOMER VIEW WITH COPYRIGHT ---------------- */
+/* ---------------- CUSTOMER VIEW WITH DIRECT QR BINDING & 5 BANNERS ---------------- */
 function CustomerView({ tableNumber, customerName, customerPhone, menuItems, activeOrders, coupons, cafeConfig, onPlaceOrder, onExit }) {
   const [cart, setCart] = useState([]); 
   const [checkout, setCheckout] = useState(false);
@@ -477,11 +491,16 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
   const [bannerIdx, setBannerIdx] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOrder, setSortOrder] = useState('default');
+  const [showGuestModal, setShowGuestModal] = useState(!customerName || !customerPhone);
+  const [guestNameInput, setGuestNameInput] = useState(customerName || '');
+  const [guestPhoneInput, setGuestPhoneInput] = useState(customerPhone || '');
 
   const defaultBanners = [
     { title: "More Cheese. More Happiness.", desc: "Hot, cheesy and baked with love, just for you.", bg: "from-purple-900 to-indigo-900", img: "" },
     { title: "Exclusive Combos", desc: "Save up to 30% OFF on selected family combos!", bg: "from-indigo-900 to-purple-950", img: "" },
-    { title: "Fresh Desserts & Shakes", desc: "Sweet endings to make your day happier.", bg: "from-purple-950 to-purple-900", img: "" }
+    { title: "Fresh Desserts & Shakes", desc: "Sweet endings to make your day happier.", bg: "from-purple-950 to-purple-900", img: "" },
+    { title: "Crispy & Crunchy Starters", desc: "Start your meal with our bestselling fries and paninis.", bg: "from-purple-900 to-purple-950", img: "" },
+    { title: "Eternal Crust Specials", desc: "Handcrafted pizzas made with secret ingredients.", bg: "from-indigo-950 to-purple-900", img: "" }
   ];
 
   const banners = (cafeConfig.banners && cafeConfig.banners.length > 0) ? cafeConfig.banners : defaultBanners;
@@ -565,6 +584,16 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
     }
   };
 
+  const handleGuestSubmit = (e) => {
+    e.preventDefault();
+    if (!guestNameInput.trim() || !guestPhoneInput.trim() || guestPhoneInput.length < 10) return playSfx('error');
+    playSfx('success');
+    localStorage.setItem('ec_cust_name', guestNameInput.trim());
+    localStorage.setItem('ec_cust_phone', guestPhoneInput.trim());
+    setShowGuestModal(false);
+    window.location.reload();
+  };
+
   const displayedMenu = useMemo(() => {
     let list = menuItems;
     if (searchQuery.trim()) {
@@ -585,6 +614,21 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
   return (
     <div className="bg-purple-950 fixed inset-0 flex justify-center overflow-hidden">
       <div className="bg-slate-50 w-full max-w-md mx-auto sm:rounded-[2.5rem] sm:shadow-2xl overflow-hidden flex flex-col h-full relative text-slate-800">
+        
+        {showGuestModal && (
+          <div className="absolute inset-0 bg-purple-950/90 backdrop-blur-md z-50 flex items-center justify-center p-6">
+            <div className="bg-white rounded-3xl p-6 w-full shadow-2xl">
+              <h3 className="text-xl font-black text-slate-900 mb-1">Welcome to Table {tableNumber}</h3>
+              <p className="text-xs text-slate-500 mb-4">Please enter your details to view menu & order.</p>
+              <form onSubmit={handleGuestSubmit} className="space-y-4">
+                <div><label className="text-xs font-bold text-slate-500 uppercase">Your Name</label><input type="text" value={guestNameInput} onChange={e => setGuestNameInput(e.target.value)} placeholder="e.g. Amit Patil" className={inpStyle} required /></div>
+                <div><label className="text-xs font-bold text-slate-500 uppercase">WhatsApp Phone</label><input type="tel" value={guestPhoneInput} onChange={e => setGuestPhoneInput(e.target.value)} placeholder="e.g. 9876543210" className={inpStyle} required maxLength={10} /></div>
+                <button type="submit" className="w-full bg-purple-700 text-white font-black py-4 rounded-xl shadow-lg">Continue to Menu</button>
+              </form>
+            </div>
+          </div>
+        )}
+
         <header className="bg-purple-900 px-4 pt-4 pb-3 text-white shadow-md z-10 shrink-0">
           <div className="flex items-center justify-between mb-3">
             {onExit && status !== 'Pending' && status !== 'Preparing' && status !== 'Verifying' ? (
@@ -715,7 +759,7 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
               </div>
 
               <div className="mb-5">
-                <p className="font-bold text-slate-500 text-xs mb-2 uppercase tracking-widest flex items-center gap-1"><Tag className="w-3.5 h-3.5"/> Available Coupons / Offers (Click to Apply/Remove)</p>
+                <p className="font-bold text-slate-400 text-xs mb-2 uppercase tracking-widest flex items-center gap-1"><Tag className="w-3.5 h-3.5"/> Available Coupons / Offers (Click to Apply/Remove)</p>
                 {coupons.length > 0 ? (
                   <div className="flex flex-wrap gap-2 mb-3">
                     {coupons.map(c => (
@@ -816,7 +860,7 @@ function AdminDashboard(p) {
             <SideBtn icon={<Package/>} label="Inventory" active={tab === 'inventory'} onClick={() => { playSfx('click'); setTab('inventory'); }} />
             <SideBtn icon={<Wallet/>} label="Petty Expenses" active={tab === 'petty'} onClick={() => { playSfx('click'); setTab('petty'); }} />
             <SideBtn icon={<Tag/>} label="Coupons" active={tab === 'coupons'} onClick={() => { playSfx('click'); setTab('coupons'); }} />
-            <SideBtn icon={<QrCode/>} label="Table & QR" active={tab === 'qr'} onClick={() => { playSfx('click'); setTab('qr'); }} />
+            <SideBtn icon={<QrCode/>} label="Tables & QR" active={tab === 'qr'} onClick={() => { playSfx('click'); setTab('qr'); }} />
             <SideBtn icon={<History/>} label="Revenue & P/L" active={tab === 'history'} onClick={() => { playSfx('click'); setTab('history'); }} />
             <SideBtn icon={<Settings/>} label="Settings" active={tab === 'settings'} onClick={() => { playSfx('click'); setTab('settings'); }} />
           </nav>
@@ -830,7 +874,7 @@ function AdminDashboard(p) {
 
       <main className="flex-1 flex flex-col h-screen overflow-hidden">
         <header className="bg-white px-5 md:px-8 py-4 flex justify-between items-center shadow-sm border-b border-slate-200 gap-4 shrink-0">
-          <h1 className="text-lg md:text-2xl font-black text-purple-950 capitalize truncate">{tab.replace('qr', 'Table & QR').replace('history', 'Revenue & Profit/Loss').replace('petty', 'Petty & Miscellaneous Expenses')}</h1>
+          <h1 className="text-lg md:text-2xl font-black text-purple-950 capitalize truncate">{tab.replace('qr', 'Tables & QR Generator').replace('history', 'Revenue & Profit/Loss').replace('petty', 'Petty & Miscellaneous Expenses')}</h1>
           <div className="flex items-center gap-3 shrink-0">
             <button onClick={toggleSound} className={`p-2.5 rounded-xl transition-colors ${soundEnabled ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-400'}`}>{soundEnabled ? <Volume2 className="w-5 h-5"/> : <VolumeX className="w-5 h-5"/>}</button>
             <button onClick={toggleVoice} className={`p-2.5 rounded-xl transition-colors ${voiceEnabled ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-400'}`}><Mic className="w-5 h-5"/></button>
@@ -844,7 +888,7 @@ function AdminDashboard(p) {
             {tab === 'inventory' && <InventoryTab stockInv={p.stockInv} iceInv={p.iceInv} db={p.db} />}
             {tab === 'petty' && <PettyExpenseTab pettyExpenses={p.pettyExpenses} db={p.db} />}
             {tab === 'coupons' && <CouponsTab coupons={p.coupons} categories={[...new Set(p.menuItems.map(m => m.category))]} db={p.db} />}
-            {tab === 'qr' && <QRTab logo={p.cafeConfig.logo} />}
+            {tab === 'qr' && <TablesAndQRTab tables={p.tables} logo={p.cafeConfig.logo} db={p.db} />}
             {tab === 'history' && <HistoryTab history={p.orderHistory} stockInv={p.stockInv} iceInv={p.iceInv} pettyExpenses={p.pettyExpenses} menuItems={p.menuItems} db={p.db} />}
             {tab === 'settings' && <SettingsTab cafeConfig={p.cafeConfig} db={p.db} />}
           </div>
@@ -899,6 +943,100 @@ function AdminCol({ title, icon, list, bg, text, action, color, onAction, onCanc
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+/* ---------------- TABLES & QR CODE GENERATOR SECTION ---------------- */
+function TablesAndQRTab({ tables, logo, db }) {
+  const [newTableName, setNewTableName] = useState('');
+  const [selectedTableForQR, setSelectedTableForQR] = useState('');
+  const cardRef = useRef(null);
+
+  const sortedTables = useMemo(() => {
+    return [...tables].sort((a, b) => (parseInt(a.name) || 0) - (parseInt(b.name) || 0));
+  }, [tables]);
+
+  const addTable = async (e) => {
+    e.preventDefault();
+    if (!newTableName.trim()) return playSfx('error');
+    playSfx('save');
+    const tid = 't' + newTableName.trim();
+    await setDoc(doc(db, 'tables', tid), { id: tid, name: newTableName.trim() });
+    setNewTableName('');
+  };
+
+  const deleteTable = async (id) => {
+    playSfx('del');
+    await deleteDoc(doc(db, 'tables', id));
+  };
+
+  const getTableQrLink = (tableName) => {
+    const baseUrl = window.location.origin + window.location.pathname;
+    return `${baseUrl}?table=${tableName}`;
+  };
+
+  const downloadJPG = () => {
+    if (!selectedTableForQR || !cardRef.current) return;
+    playSfx('click');
+    const node = cardRef.current;
+    import('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js').then(() => {
+      window.html2canvas(node, { scale: 3, useCORS: true }).then(canvas => {
+        const a = document.createElement('a');
+        a.href = canvas.toDataURL('image/jpeg', 1.0);
+        a.download = `Table_${selectedTableForQR}_QR_Card.jpg`;
+        a.click();
+      });
+    }).catch(() => {
+      window.print();
+    });
+  };
+
+  return (
+    <div className="space-y-8 max-w-4xl">
+      <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm">
+        <h2 className="text-xl font-black text-slate-900 mb-4">Manage Restaurant Tables</h2>
+        <form onSubmit={addTable} className="flex gap-3 mb-6">
+          <input type="text" placeholder="Enter Table No e.g. 1, 2, VIP1" value={newTableName} onChange={e => setNewTableName(e.target.value)} className={inpStyle} required />
+          <button type="submit" className="bg-purple-700 hover:bg-purple-800 text-white px-6 py-3 rounded-xl font-bold shrink-0 flex items-center gap-2"><Plus className="w-5 h-5"/> Add Table</button>
+        </form>
+
+        <div className="flex flex-wrap gap-3">
+          {sortedTables.map(t => (
+            <div key={t.id} className="bg-purple-50 border border-purple-200 px-4 py-3 rounded-2xl flex items-center gap-4">
+              <div>
+                <p className="text-xs font-bold text-purple-500 uppercase">Table</p>
+                <p className="text-lg font-black text-purple-950">{t.name}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setSelectedTableForQR(t.name)} className="bg-purple-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow-sm hover:bg-purple-800">Generate QR</button>
+                <DelBtn onDel={() => deleteTable(t.id)} />
+              </div>
+            </div>
+          ))}
+          {sortedTables.length === 0 && <p className="text-slate-400 font-bold text-sm">No tables added yet.</p>}
+        </div>
+      </div>
+
+      {selectedTableForQR && (
+        <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm flex flex-col md:flex-row gap-8 items-center justify-center">
+          <div className="flex flex-col items-center">
+            <div ref={cardRef} className="w-[340px] bg-white rounded-[36px] overflow-hidden shadow-2xl text-center pb-8 border border-slate-100">
+              <div className="bg-[#7e22ce] text-white pt-8 pb-[80px] rounded-b-[45px]">
+                {logo ? <img src={logo} className="w-12 h-12 rounded-full mx-auto mb-2 object-cover border-2 border-white" alt="logo" /> : <Coffee className="w-10 h-10 text-[#d8b4fe] mx-auto mb-2"/>}
+                <h1 className="text-4xl font-black m-0 leading-none">Table {selectedTableForQR}</h1>
+                <p className="text-[11px] font-black tracking-[0.25em] text-[#d8b4fe] mt-2">SCAN TO ORDER</p>
+              </div>
+              <div className="bg-white w-56 h-56 mx-auto -mt-16 rounded-3xl p-3 shadow-[0_10px_35px_rgba(0,0,0,0.18)] relative z-10 border border-slate-100">
+                <img src={getQrUrl(getTableQrLink(selectedTableForQR))} alt="QR" className="w-full h-full object-contain" />
+              </div>
+              <h2 className="text-[#4c1d95] font-black text-xl mt-6 tracking-tight">{CAFE_NAME}</h2>
+              <p className="text-xs font-bold text-slate-400 mt-1">Good food travels better</p>
+            </div>
+            <button onClick={downloadJPG} className="mt-6 bg-purple-800 text-white px-8 py-3.5 rounded-xl font-bold flex items-center gap-2 shadow-lg hover:bg-purple-900 active:scale-95"><Download className="w-5 h-5"/> Download JPG Image</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1309,67 +1447,6 @@ function InvSection({ title, icon, items, colName, db, prefix, search }) {
   );
 }
 
-/* ---------------- JPG QR CARD GENERATOR ---------------- */
-function QRTab({ logo }) {
-  const [link, setLink] = useState('');
-  const [tbl, setTbl] = useState('');
-  const [cardData, setCardData] = useState(null);
-  const cardRef = useRef(null);
-
-  const generate = () => {
-    if (!link.trim() || !tbl.trim()) return playSfx('error');
-    playSfx('save');
-    setCardData({ link: link.trim(), tbl: tbl.trim() });
-  };
-
-  const downloadJPG = () => {
-    if (!cardData || !cardRef.current) return;
-    playSfx('click');
-    const node = cardRef.current;
-    import('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js').then(() => {
-      window.html2canvas(node, { scale: 3, useCORS: true }).then(canvas => {
-        const a = document.createElement('a');
-        a.href = canvas.toDataURL('image/jpeg', 1.0);
-        a.download = `Table_${cardData.tbl}_QR_Card.jpg`;
-        a.click();
-      });
-    }).catch(() => {
-      window.print();
-    });
-  };
-
-  return (
-    <div className="flex flex-col md:flex-row gap-8 items-start">
-      <div className="w-full md:w-1/2 bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
-        <h2 className="font-black text-2xl text-purple-950 mb-4 flex items-center gap-2"><QrCode/> Create QR Card</h2>
-        <div className="space-y-4">
-          <div><label className="text-xs font-bold text-slate-500 uppercase">1. Insert Website Link</label><input type="text" placeholder="https://..." value={link} onChange={e => setLink(e.target.value)} className={inpStyle} /></div>
-          <div><label className="text-xs font-bold text-slate-500 uppercase">2. Enter Table Number</label><input type="text" inputMode="numeric" placeholder="e.g. 5" value={tbl} onChange={e => setTbl(e.target.value)} className={inpStyle} /></div>
-          <button onClick={generate} className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-4 rounded-xl">Generate Card View</button>
-        </div>
-      </div>
-      
-      {cardData && (
-        <div className="w-full md:w-1/2 flex flex-col items-center justify-center p-8 bg-slate-200/50 rounded-3xl border-2 border-dashed border-slate-300">
-          <div ref={cardRef} className="w-[340px] bg-white rounded-[36px] overflow-hidden shadow-2xl text-center pb-8 border border-slate-100">
-            <div className="bg-[#7e22ce] text-white pt-8 pb-[80px] rounded-b-[45px]">
-              {logo ? <img src={logo} className="w-12 h-12 rounded-full mx-auto mb-2 object-cover border-2 border-white" alt="logo" /> : <Coffee className="w-10 h-10 text-[#d8b4fe] mx-auto mb-2"/>}
-              <h1 className="text-4xl font-black m-0 leading-none">Table {cardData.tbl}</h1>
-              <p className="text-[11px] font-black tracking-[0.25em] text-[#d8b4fe] mt-2">SCAN TO ORDER</p>
-            </div>
-            <div className="bg-white w-56 h-56 mx-auto -mt-16 rounded-3xl p-3 shadow-[0_10px_35px_rgba(0,0,0,0.18)] relative z-10 border border-slate-100">
-              <img src={getQrUrl(cardData.link)} alt="QR" className="w-full h-full object-contain" />
-            </div>
-            <h2 className="text-[#4c1d95] font-black text-xl mt-6 tracking-tight">{CAFE_NAME}</h2>
-            <p className="text-xs font-bold text-slate-400 mt-1">Good food travels better</p>
-          </div>
-          <button onClick={downloadJPG} className="mt-8 bg-purple-800 text-white px-8 py-3.5 rounded-xl font-bold flex items-center gap-2 shadow-lg hover:bg-purple-900 active:scale-95"><Download className="w-5 h-5"/> Download JPG Image</button>
-        </div>
-      )}
-    </div>
-  );
-}
-
 /* ---------------- REVENUE & PROFIT/LOSS SECTION ---------------- */
 function HistoryTab({ history, stockInv, iceInv, pettyExpenses, menuItems, db }) {
   const [from, setFrom] = useState(''); const [to, setTo] = useState('');
@@ -1441,41 +1518,40 @@ function HistoryTab({ history, stockInv, iceInv, pettyExpenses, menuItems, db })
   );
 }
 
-/* ---------------- SETTINGS TAB ---------------- */
+/* ---------------- SETTINGS TAB WITH 5 BANNERS ---------------- */
 function SettingsTab({ cafeConfig, db }) {
-  const fileRef = useRef(null);
+  const logoRef = useRef(null);
   const [upi, setUpi] = useState(cafeConfig.upiId || 'snehaltitkare58-2@okicici');
   const [lat, setLat] = useState(cafeConfig.lat ?? 19.2183);
   const [lng, setLng] = useState(cafeConfig.lng ?? 73.1633);
   const [radius, setRadius] = useState(cafeConfig.radius ?? 100);
 
-  const [b1Title, setB1Title] = useState(cafeConfig.banners?.[0]?.title || 'More Cheese. More Happiness.');
-  const [b1Desc, setB1Desc] = useState(cafeConfig.banners?.[0]?.desc || 'Hot, cheesy and baked with love, just for you.');
-  const [b1Img, setB1Img] = useState(cafeConfig.banners?.[0]?.img || '');
-
-  const [b2Title, setB2Title] = useState(cafeConfig.banners?.[1]?.title || 'Exclusive Combos');
-  const [b2Desc, setB2Desc] = useState(cafeConfig.banners?.[1]?.desc || 'Save up to 30% OFF on selected family combos!');
-  const [b2Img, setB2Img] = useState(cafeConfig.banners?.[1]?.img || '');
-
-  const [b3Title, setB3Title] = useState(cafeConfig.banners?.[2]?.title || 'Fresh Desserts & Shakes');
-  const [b3Desc, setB3Desc] = useState(cafeConfig.banners?.[2]?.desc || 'Sweet endings to make your day happier.');
-  const [b3Img, setB3Img] = useState(cafeConfig.banners?.[2]?.img || '');
-
-  const logoRef = useRef(null);
+  const [banners, setBanners] = useState(() => {
+    const existing = cafeConfig.banners || [];
+    const defaults = [
+      { title: "More Cheese. More Happiness.", desc: "Hot, cheesy and baked with love, just for you.", bg: "from-purple-900 to-indigo-900", img: "" },
+      { title: "Exclusive Combos", desc: "Save up to 30% OFF on selected family combos!", bg: "from-indigo-900 to-purple-950", img: "" },
+      { title: "Fresh Desserts & Shakes", desc: "Sweet endings to make your day happier.", bg: "from-purple-950 to-purple-900", img: "" },
+      { title: "Crispy & Crunchy Starters", desc: "Start your meal with our bestselling fries and paninis.", bg: "from-purple-900 to-purple-950", img: "" },
+      { title: "Eternal Crust Specials", desc: "Handcrafted pizzas made with secret ingredients.", bg: "from-indigo-950 to-purple-900", img: "" }
+    ];
+    return Array.from({ length: 5 }, (_, i) => existing[i] || defaults[i]);
+  });
 
   const saveLogo = async (url) => {
     playSfx('save');
     await setDoc(doc(db, 'settings', 'config'), { ...cafeConfig, logo: url });
   };
 
+  const updateBannerField = (index, field, value) => {
+    const updated = [...banners];
+    updated[index][field] = value;
+    setBanners(updated);
+  };
+
   const saveSettings = async (e) => {
     e.preventDefault();
     playSfx('save');
-    const banners = [
-      { title: b1Title, desc: b1Desc, bg: "from-purple-900 to-indigo-900", img: b1Img },
-      { title: b2Title, desc: b2Desc, bg: "from-indigo-900 to-purple-950", img: b2Img },
-      { title: b3Title, desc: b3Desc, bg: "from-purple-950 to-purple-900", img: b3Img }
-    ];
     await setDoc(doc(db, 'settings', 'config'), { 
       ...cafeConfig, 
       upiId: upi.trim(),
@@ -1484,13 +1560,13 @@ function SettingsTab({ cafeConfig, db }) {
       radius: Number(radius),
       banners 
     });
-    alert('Settings & Location saved successfully!');
+    alert('Settings & Banners saved successfully!');
   };
 
   return (
     <div className="space-y-6 max-w-xl">
       <div className="bg-white rounded-3xl border border-slate-200 p-8">
-        <h2 className="text-2xl font-black text-slate-900 mb-6">Cafe Geofence Location (100m Restriction)</h2>
+        <h2 className="text-2xl font-black text-slate-900 mb-6">Cafe Geofence Location & Settings</h2>
         <form onSubmit={saveSettings} className="space-y-4">
           <div><label className="text-xs font-bold text-slate-500 uppercase">Cafe Latitude</label><input type="number" step="any" value={lat} onChange={e => setLat(e.target.value)} className={inpStyle} required /></div>
           <div><label className="text-xs font-bold text-slate-500 uppercase">Cafe Longitude</label><input type="number" step="any" value={lng} onChange={e => setLng(e.target.value)} className={inpStyle} required /></div>
@@ -1509,25 +1585,15 @@ function SettingsTab({ cafeConfig, db }) {
           </div>
 
           <div className="pt-4 border-t space-y-4">
-            <h2 className="text-xl font-black text-slate-900">Manage 3 Banners</h2>
-            <div className="bg-slate-50 p-4 rounded-2xl border space-y-3">
-              <p className="font-black text-purple-900 text-sm">Banner 1</p>
-              <div><label className="text-[10px] font-bold text-slate-500 uppercase">Title</label><input type="text" value={b1Title} onChange={e => setB1Title(e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
-              <div><label className="text-[10px] font-bold text-slate-500 uppercase">Description</label><input type="text" value={b1Desc} onChange={e => setB1Desc(e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
-              <div className="flex items-center gap-3"><input type="file" accept="image/*" onChange={async e => { if(e.target.files[0]) setB1Img(await readImg(e.target.files[0])); }} className="w-full text-xs" />{b1Img && <button type="button" onClick={() => setB1Img('')} className="bg-red-100 text-red-600 px-3 py-1.5 rounded-xl text-xs font-bold shrink-0">Remove</button>}</div>
-            </div>
-            <div className="bg-slate-50 p-4 rounded-2xl border space-y-3">
-              <p className="font-black text-purple-900 text-sm">Banner 2</p>
-              <div><label className="text-[10px] font-bold text-slate-500 uppercase">Title</label><input type="text" value={b2Title} onChange={e => setB2Title(e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
-              <div><label className="text-[10px] font-bold text-slate-500 uppercase">Description</label><input type="text" value={b2Desc} onChange={e => setB2Desc(e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
-              <div className="flex items-center gap-3"><input type="file" accept="image/*" onChange={async e => { if(e.target.files[0]) setB2Img(await readImg(e.target.files[0])); }} className="w-full text-xs" />{b2Img && <button type="button" onClick={() => setB2Img('')} className="bg-red-100 text-red-600 px-3 py-1.5 rounded-xl text-xs font-bold shrink-0">Remove</button>}</div>
-            </div>
-            <div className="bg-slate-50 p-4 rounded-2xl border space-y-3">
-              <p className="font-black text-purple-900 text-sm">Banner 3</p>
-              <div><label className="text-[10px] font-bold text-slate-500 uppercase">Title</label><input type="text" value={b3Title} onChange={e => setB3Title(e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
-              <div><label className="text-[10px] font-bold text-slate-500 uppercase">Description</label><input type="text" value={b3Desc} onChange={e => setB3Desc(e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
-              <div className="flex items-center gap-3"><input type="file" accept="image/*" onChange={async e => { if(e.target.files[0]) setB3Img(await readImg(e.target.files[0])); }} className="w-full text-xs" />{b3Img && <button type="button" onClick={() => setB3Img('')} className="bg-red-100 text-red-600 px-3 py-1.5 rounded-xl text-xs font-bold shrink-0">Remove</button>}</div>
-            </div>
+            <h2 className="text-xl font-black text-slate-900">Manage 5 Banners</h2>
+            {banners.map((b, idx) => (
+              <div key={idx} className="bg-slate-50 p-4 rounded-2xl border space-y-3">
+                <p className="font-black text-purple-900 text-sm">Banner {idx + 1}</p>
+                <div><label className="text-[10px] font-bold text-slate-500 uppercase">Title</label><input type="text" value={b.title} onChange={e => updateBannerField(idx, 'title', e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
+                <div><label className="text-[10px] font-bold text-slate-500 uppercase">Description</label><input type="text" value={b.desc} onChange={e => updateBannerField(idx, 'desc', e.target.value)} className={inpStyle + ' py-2 text-xs'} /></div>
+                <div className="flex items-center gap-3"><input type="file" accept="image/*" onChange={async e => { if(e.target.files[0]) updateBannerField(idx, 'img', await readImg(e.target.files[0])); }} className="w-full text-xs" />{b.img && <button type="button" onClick={() => updateBannerField(idx, 'img', '')} className="bg-red-100 text-red-600 px-3 py-1.5 rounded-xl text-xs font-bold shrink-0">Remove Image</button>}</div>
+              </div>
+            ))}
           </div>
 
           <button type="submit" className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-4 rounded-xl mt-4">Save All Settings</button>
