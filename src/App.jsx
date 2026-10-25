@@ -90,23 +90,14 @@ export default function App() {
   const [customerName, setCustomerName] = useState(() => localStorage.getItem('ec_cust_name') || '');
   const [customerPhone, setCustomerPhone] = useState(() => localStorage.getItem('ec_cust_phone') || '');
   const [isAdminAuth, setIsAdminAuth] = useState(() => localStorage.getItem('ec_admin_auth') === 'true');
+  const [geoVerified, setGeoVerified] = useState(false);
+  const [geoChecking, setGeoChecking] = useState(true);
+  const [geoError, setGeoError] = useState('');
   
-  const [mode, setMode] = useState(() => {
-    const params = new URLSearchParams(window.location.search);
-    const urlTable = params.get('table');
-    if (urlTable) {
-      localStorage.setItem('ec_active_table', urlTable);
-      return 'customer';
-    }
-    if (localStorage.getItem('ec_admin_auth') === 'true') return 'admin';
-    if (sessionTable) return 'customer';
-    return 'landing';
-  });
-  
-  const [table, setTable] = useState(() => {
-    const params = new URLSearchParams(window.location.search);
-    return params.get('table') || sessionTable || null;
-  });
+  const [cafeConfig, setCafeConfig] = useState({ logo: '', upiId: 'snehaltitkare58-2@okicici', banners: [], lat: 19.2183, lng: 73.1633, radius: 100 });
+
+  const [mode, setMode] = useState('landing');
+  const [table, setTable] = useState(null);
 
   const [menuItems, setMenuItems] = useState([]);
   const [activeOrders, setActiveOrders] = useState([]);
@@ -116,7 +107,85 @@ export default function App() {
   const [iceInv, setIceInv] = useState([]);
   const [pettyExpenses, setPettyExpenses] = useState([]);
   const [coupons, setCoupons] = useState([]);
-  const [cafeConfig, setCafeConfig] = useState({ logo: '', upiId: 'snehaltitkare58-2@okicici', banners: [], lat: 19.2183, lng: 73.1633, radius: 100 });
+
+  useEffect(() => {
+    const unsubSettings = onSnapshot(doc(db, 'settings', 'config'), (snap) => {
+      if (snap.exists()) {
+        setCafeConfig(snap.data());
+      }
+    });
+    return () => unsubSettings();
+  }, []);
+
+  // Geofence verification on load if table parameter exists
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlTable = params.get('table');
+
+    if (localStorage.getItem('ec_admin_auth') === 'true') {
+      setMode('admin');
+      setGeoChecking(false);
+      return;
+    }
+
+    if (urlTable || sessionTable) {
+      const targetTable = urlTable || sessionTable;
+      setTable(targetTable);
+      if (urlTable) localStorage.setItem('ec_active_table', urlTable);
+
+      // Check Geofence Location
+      if (!navigator.geolocation) {
+        setGeoError('Geolocation is not supported by your browser');
+        setGeoChecking(false);
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const userLat = position.coords.latitude;
+          const userLng = position.coords.longitude;
+          
+          const cafeLat = cafeConfig.lat ?? 19.2183;
+          const cafeLng = cafeConfig.lng ?? 73.1633;
+          const allowedRadius = cafeConfig.radius ?? 100; // in meters
+
+          const distance = getDistanceFromLatLonInMeters(userLat, userLng, cafeLat, cafeLng);
+
+          if (distance <= allowedRadius) {
+            setGeoVerified(true);
+            setMode('customer');
+          } else {
+            setGeoError(`You are outside the cafe premises! (Distance: ${Math.round(distance)}m, Allowed: ${allowedRadius}m)`);
+          }
+          setGeoChecking(false);
+        },
+        (error) => {
+          setGeoError('Please enable location permission to access the cafe menu.');
+          setGeoChecking(false);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    } else {
+      setGeoChecking(false);
+      setMode('landing');
+    }
+  }, [cafeConfig]);
+
+  function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
+    const R = 6371000; // Radius of the earth in meters
+    const dLat = deg2rad(lat2 - lat1);
+    const dLon = deg2rad(lon2 - lon1);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
+  function deg2rad(deg) {
+    return deg * (Math.PI / 180);
+  }
 
   useEffect(() => {
     const checkReminder = () => {
@@ -187,12 +256,8 @@ export default function App() {
       setCoupons(snap.docs.map(d => ({ ...d.data(), id: d.id })));
     });
 
-    const unsubSettings = onSnapshot(doc(db, 'settings', 'config'), (snap) => {
-      if (snap.exists()) setCafeConfig(snap.data());
-    });
-
     return () => {
-      unsubMenu(); unsubOrders(); unsubHistory(); unsubTables(); unsubStock(); unsubIce(); unsubPetty(); unsubCoupons(); unsubSettings();
+      unsubMenu(); unsubOrders(); unsubHistory(); unsubTables(); unsubStock(); unsubIce(); unsubPetty(); unsubCoupons();
     };
   }, []);
 
@@ -281,6 +346,28 @@ ${discountLine}*Total : ₹${o.total}*
     setMode('landing');
   };
 
+  if (geoChecking) {
+    return (
+      <div className="min-h-screen bg-purple-950 flex flex-col items-center justify-center text-white p-4">
+        <div className="w-12 h-12 border-4 border-purple-400 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p className="font-bold text-sm">Verifying your location within cafe radius...</p>
+      </div>
+    );
+  }
+
+  if (geoError && mode !== 'admin') {
+    return (
+      <div className="min-h-screen bg-purple-950 flex flex-col items-center justify-center text-white p-6 text-center select-none">
+        <div className="bg-red-500/20 border border-red-500/50 p-6 rounded-3xl max-w-md w-full shadow-2xl space-y-4">
+          <AlertTriangle className="w-12 h-12 text-red-400 mx-auto" />
+          <h2 className="text-xl font-black">Access Restricted</h2>
+          <p className="text-xs text-red-200 font-medium leading-relaxed">{geoError}</p>
+          <button onClick={() => window.location.reload()} className="w-full bg-white text-slate-900 font-black py-3 rounded-xl text-sm shadow-lg">Retry Location Check</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-purple-950 font-sans text-slate-100 selection:bg-purple-500 overflow-hidden">
       {mode === 'landing' && <LandingView logo={cafeConfig.logo} cafeConfig={cafeConfig} onAdminLogin={adminLoginSuccess} />}
@@ -308,51 +395,9 @@ function DelBtn({ onDel }) {
   return <button onClick={() => { playSfx('click'); if (a) onDel(); else setA(true); }} className={`p-2 rounded-xl transition-colors text-xs font-black shrink-0 ${a ? 'bg-red-600 text-white' : 'bg-slate-50 text-slate-400 hover:text-red-600 hover:bg-red-50'}`}>{a ? 'Sure?' : <Trash2 className="w-4 h-4"/>}</button>;
 }
 
-/* ---------------- LANDING VIEW WITH ONLY GOOGLE LENS INSTRUCTION & GEOFENCE ---------------- */
+/* ---------------- LANDING VIEW WITH SIMPLE GOOGLE LENS INSTRUCTION ---------------- */
 function LandingView({ logo, cafeConfig, onAdminLogin }) {
   const [showLogin, setShowLogin] = useState(false);
-  const [locationStatus, setLocationStatus] = useState('checking'); // checking, allowed, denied
-
-  useEffect(() => {
-    if (!navigator.geolocation) {
-      setLocationStatus('allowed'); // Fallback if geolocation not supported
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const userLat = pos.coords.latitude;
-        const userLng = pos.coords.longitude;
-        const cafeLat = cafeConfig.lat ?? 19.2183;
-        const cafeLng = cafeConfig.lng ?? 73.1633;
-        const allowedRadius = cafeConfig.radius ?? 100; // in meters
-
-        // Haversine formula
-        const R = 6371e3; // metres
-        const φ1 = (userLat * Math.PI) / 180;
-        const φ2 = (cafeLat * Math.PI) / 180;
-        const Δφ = ((cafeLat - userLat) * Math.PI) / 180;
-        const Δλ = ((cafeLng - userLng) * Math.PI) / 180;
-
-        const a =
-          Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-          Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        const distance = R * c; // in meters
-
-        if (distance <= allowedRadius) {
-          setLocationStatus('allowed');
-        } else {
-          setLocationStatus('denied');
-        }
-      },
-      (err) => {
-        // If location permission denied or error, allow or restrict based on preference. Let's allow for smooth testing or deny if strict.
-        setLocationStatus('allowed');
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
-  }, [cafeConfig]);
 
   return (
     <div className="fixed inset-0 flex flex-col justify-between overflow-hidden bg-gradient-to-b from-purple-950 via-purple-900 to-indigo-950 p-4 select-none">
@@ -367,28 +412,11 @@ function LandingView({ logo, cafeConfig, onAdminLogin }) {
           <p className="text-purple-300 text-xs font-medium tracking-wide">Good food travels better.</p>
         </div>
 
-        {locationStatus === 'checking' && (
-          <div className="relative flex flex-col items-center justify-center bg-white/5 backdrop-blur-md p-8 rounded-[2.5rem] border border-white/10 shadow-2xl w-full text-center space-y-4">
-            <Clock className="w-12 h-12 text-purple-300 mx-auto animate-spin" />
-            <h2 className="text-lg font-black text-white">Checking your location...</h2>
-          </div>
-        )}
-
-        {locationStatus === 'denied' && (
-          <div className="relative flex flex-col items-center justify-center bg-red-950/40 backdrop-blur-md p-8 rounded-[2.5rem] border border-red-500/30 shadow-2xl w-full text-center space-y-4">
-            <AlertTriangle className="w-16 h-16 text-red-400 mx-auto animate-bounce" />
-            <h2 className="text-xl font-black text-white">Access Restricted</h2>
-            <p className="text-xs text-red-200 font-medium leading-relaxed">You must be inside the café premises to access the menu and place orders.</p>
-          </div>
-        )}
-
-        {locationStatus === 'allowed' && (
-          <div className="relative flex flex-col items-center justify-center bg-white/5 backdrop-blur-md p-8 rounded-[2.5rem] border border-white/10 shadow-2xl w-full text-center space-y-4">
-            <QrCode className="w-16 h-16 text-purple-300 mx-auto animate-pulse" />
-            <h2 className="text-xl font-black text-white">Scan Table QR with Google Lens</h2>
-            <p className="text-xs text-purple-200 font-medium leading-relaxed">Please use your Google Lens camera to scan the QR code placed on your table.</p>
-          </div>
-        )}
+        <div className="relative flex flex-col items-center justify-center bg-white/5 backdrop-blur-md p-8 rounded-[2.5rem] border border-white/10 shadow-2xl w-full text-center space-y-4">
+          <QrCode className="w-16 h-16 text-purple-300 mx-auto animate-pulse" />
+          <h2 className="text-xl font-black text-white">Scan Table QR with Google Lens</h2>
+          <p className="text-xs text-purple-200 font-medium leading-relaxed">Please scan the QR code placed on your table using Google Lens to access the menu.</p>
+        </div>
       </div>
 
       <footer className="py-2 text-center text-purple-300/70 text-[10px] font-bold tracking-wider shrink-0 space-y-0.5">
