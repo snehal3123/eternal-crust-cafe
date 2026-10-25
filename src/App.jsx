@@ -314,13 +314,16 @@ function LandingView({ logo, cafeConfig, onAdminLogin }) {
 
   const openGoogleLens = () => {
     playSfx('click');
-    // Opens Google Lens / Search App scanner URL scheme or fallback web search
-    const lensUrl = "googlelens://";
-    window.location.href = lensUrl;
-    setTimeout(() => {
-      // Fallback if googlelens schema is not directly handled by browser
-      window.open("https://lens.google.com", "_blank");
-    }, 1000);
+    // Opens Google Lens / Google Search lens intent or Web Lens
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (isMobile) {
+      window.location.href = "googlelens://";
+      setTimeout(() => {
+        window.open("https://lens.google.com/", "_blank");
+      }, 500);
+    } else {
+      window.open("https://lens.google.com/", "_blank");
+    }
   };
 
   return (
@@ -339,7 +342,7 @@ function LandingView({ logo, cafeConfig, onAdminLogin }) {
         <div className="relative flex flex-col items-center justify-center bg-white/5 backdrop-blur-md p-8 rounded-[2.5rem] border border-white/10 shadow-2xl w-full text-center space-y-4">
           <QrCode className="w-16 h-16 text-purple-300 mx-auto animate-pulse" />
           <h2 className="text-xl font-black text-white">Scan Table QR with Google Lens</h2>
-          <p className="text-xs text-purple-200 font-medium leading-relaxed">Tap the button below to open Google Lens camera and scan your table QR code to automatically join your table.</p>
+          <p className="text-xs text-purple-200 font-medium leading-relaxed">Click below to open Google Lens camera to scan your table QR code instantly.</p>
           <button 
             onClick={openGoogleLens} 
             className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-base py-4 rounded-full shadow-[0_8px_25px_rgba(147,51,234,0.4)] active:scale-95 transition-all flex items-center justify-center gap-2"
