@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Coffee, Utensils, Plus, Minus, ChevronLeft, LayoutDashboard, LogOut,
   CheckCircle, Clock, ChefHat, Bell, Edit, Trash2, ToggleLeft, ToggleRight, QrCode, Printer,
-  CreditCard, Banknote, X, History, Download, Image as ImageIcon, Package, AlertTriangle, Upload, IceCream, Lock, Eye, EyeOff, Settings, Volume2, VolumeX, Mic, Search, MessageSquare, Tag, Wallet, MapPin
+  CreditCard, Banknote, X, History, Download, Image as ImageIcon, Package, AlertTriangle, Upload, IceCream, Lock, Eye, EyeOff, Settings, Volume2, VolumeX, Mic, Search, MessageSquare, Tag, Wallet, MapPin, Camera
 } from 'lucide-react';
 
 /* ---------------- AUDIO & VOICE ENGINE ---------------- */
@@ -92,7 +92,6 @@ export default function App() {
   const [isAdminAuth, setIsAdminAuth] = useState(() => localStorage.getItem('ec_admin_auth') === 'true');
   
   const [mode, setMode] = useState(() => {
-    // Check URL parameters for direct table binding via QR scan e.g. ?table=1
     const params = new URLSearchParams(window.location.search);
     const urlTable = params.get('table');
     if (urlTable) {
@@ -101,7 +100,7 @@ export default function App() {
     }
     if (localStorage.getItem('ec_admin_auth') === 'true') return 'admin';
     if (sessionTable) return 'customer';
-    return 'landing';
+    return 'landing'; // Landing shows Scan QR option only
   });
   
   const [table, setTable] = useState(() => {
@@ -273,7 +272,6 @@ ${discountLine}*Total : ₹${o.total}*
     localStorage.removeItem('ec_active_table');
     localStorage.removeItem('ec_cust_name');
     localStorage.removeItem('ec_cust_phone');
-    // Clear URL query parameters on exit
     window.history.replaceState({}, document.title, window.location.pathname);
     setSessionTable(null);
     setCustomerName('');
@@ -296,7 +294,7 @@ ${discountLine}*Total : ₹${o.total}*
 
   return (
     <div className="min-h-screen bg-purple-950 font-sans text-slate-100 selection:bg-purple-500 overflow-hidden">
-      {mode === 'landing' && <LandingView tables={tables} activeOrders={activeOrders} logo={cafeConfig.logo} cafeConfig={cafeConfig} onJoin={joinTable} onAdminLogin={adminLoginSuccess} />}
+      {mode === 'landing' && <LandingView logo={cafeConfig.logo} cafeConfig={cafeConfig} onAdminLogin={adminLoginSuccess} />}
       {mode === 'customer' && <CustomerView tableNumber={table} customerName={customerName} customerPhone={customerPhone} menuItems={menuItems} activeOrders={activeOrders} coupons={coupons} cafeConfig={cafeConfig} onPlaceOrder={placeOrder} onExit={exitTable} />}
       {mode === 'admin' && isAdminAuth && <AdminDashboard {...{ activeOrders, setActiveOrders, orderHistory, setOrderHistory, completeOrder, cancelOrder, menuItems, setMenuItems, tables, setTables, stockInv, setStockInv, iceInv, setIceInv, pettyExpenses, setPettyExpenses, coupons, setCoupons, cafeConfig, db }} onExit={adminLogout} />}
     </div>
@@ -321,117 +319,65 @@ function DelBtn({ onDel }) {
   return <button onClick={() => { playSfx('click'); if (a) onDel(); else setA(true); }} className={`p-2 rounded-xl transition-colors text-xs font-black shrink-0 ${a ? 'bg-red-600 text-white' : 'bg-slate-50 text-slate-400 hover:text-red-600 hover:bg-red-50'}`}>{a ? 'Sure?' : <Trash2 className="w-4 h-4"/>}</button>;
 }
 
-/* ---------------- LANDING VIEW WITH 100M GEOFENCING ---------------- */
-function LandingView({ tables, activeOrders, logo, cafeConfig, onJoin, onAdminLogin }) {
+/* ---------------- LANDING VIEW WITH ONLY QR SCAN PROMPT ---------------- */
+function LandingView({ logo, cafeConfig, onAdminLogin }) {
   const [showLogin, setShowLogin] = useState(false);
-  const [wi, setWi] = useState(0);
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [showModal, setShowModal] = useState(false);
-  const [locError, setLocError] = useState('');
-  const [checkingLoc, setCheckingLoc] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
+  const scannerRef = useRef(null);
 
-  const sortedTables = useMemo(() => {
-    return [...tables].sort((a, b) => (parseInt(a.name) || 0) - (parseInt(b.name) || 0));
-  }, [tables]);
-
-  const currentTable = sortedTables[wi] || { name: '1' };
-  const isBooked = activeOrders.some(o => o.table === String(currentTable.name) && o.status !== 'Completed');
-
-  const calculateDistance = (lat1, lon1, lat2, lon2) => {
-    const R = 6371e3;
-    const φ1 = (lat1 * Math.PI) / 180;
-    const φ2 = (lat2 * Math.PI) / 180;
-    const Δφ = ((lat2 - lat1) * Math.PI) / 180;
-    const Δλ = ((lon2 - lon1) * Math.PI) / 180;
-
-    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-  };
-
-  const handleJoinClick = () => {
+  const startScanner = () => {
     playSfx('click');
-    setLocError('');
-    setCheckingLoc(true);
-
-    if (!navigator.geolocation) {
-      setCheckingLoc(false);
-      setLocError('Geolocation is not supported by your browser.');
-      setShowModal(true);
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setCheckingLoc(false);
-        const userLat = position.coords.latitude;
-        const userLng = position.coords.longitude;
-        const cafeLat = cafeConfig.lat || 19.2183;
-        const cafeLng = cafeConfig.lng || 73.1633;
-        const allowedRadius = cafeConfig.radius || 100;
-
-        const dist = calculateDistance(userLat, userLng, cafeLat, cafeLng);
-        if (dist <= allowedRadius) {
-          setShowModal(true);
-        } else {
-          setLocError(`You are outside the café premises! (${Math.round(dist)}m away). You must be within ${allowedRadius}m to order.`);
-          setShowModal(true);
+    setShowScanner(true);
+    // Dynamically load html5-qrcode for live camera scanning
+    import('https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js').then(() => {
+      const scanner = new window.Html5QrcodeScanner("qr-reader", { fps: 10, qrbox: 250 });
+      scanner.render((decodedText) => {
+        try {
+          const urlObj = new URL(decodedText);
+          const tbl = urlObj.searchParams.get('table');
+          if (tbl) {
+            scanner.clear();
+            window.location.href = decodedText;
+          } else {
+            alert('Invalid Cafe QR Code');
+          }
+        } catch (e) {
+          if (decodedText.includes('table=')) {
+            window.location.href = decodedText;
+          } else {
+            alert('Scanned QR code is not valid for this cafe.');
+          }
         }
-      },
-      (error) => {
-        setCheckingLoc(false);
-        setLocError('Location permission denied or unavailable. Please enable GPS to access the cafe menu.');
-        setShowModal(true);
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
-  };
-
-  const handleProceed = (e) => {
-    e.preventDefault();
-    if (locError && locError.includes('outside')) return;
-    if (!name.trim() || !phone.trim() || phone.length < 10) return playSfx('error');
-    playSfx('success');
-    onJoin(currentTable.name, name.trim(), phone.trim());
+      }, (error) => {
+        // scanning error ignore
+      });
+    }).catch(err => {
+      alert('Camera scanner failed to load. Please use your camera app to scan the table QR directly.');
+    });
   };
 
   return (
-    <div className="fixed inset-0 flex flex-col justify-between overflow-hidden bg-gradient-to-b from-purple-950 via-purple-900 to-indigo-950 p-4 select-none" onWheel={(e) => setWi(p => e.deltaY > 0 ? Math.min(p + 1, sortedTables.length - 1) : Math.max(p - 1, 0))}>
+    <div className="fixed inset-0 flex flex-col justify-between overflow-hidden bg-gradient-to-b from-purple-950 via-purple-900 to-indigo-950 p-4 select-none">
       <div className="absolute top-4 right-4 z-50"><button onClick={() => { playSfx('click'); setShowLogin(true); }} className="p-2.5 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full text-white"><Lock className="w-4 h-4"/></button></div>
       
       <div className="flex-1 flex flex-col items-center justify-center w-full max-w-md mx-auto">
-        <div className="flex flex-col items-center text-center z-10 mb-4">
-          <div className="w-20 h-20 bg-purple-800/50 rounded-full shadow-[0_0_30px_rgba(168,85,247,0.4)] mb-2 backdrop-blur-sm border-2 border-purple-400/50 overflow-hidden flex items-center justify-center shrink-0">
-            {logo ? <img src={logo} alt="Logo" className="w-full h-full object-cover" /> : <Coffee className="w-8 h-8 text-purple-200"/>}
+        <div className="flex flex-col items-center text-center z-10 mb-6">
+          <div className="w-24 h-24 bg-purple-800/50 rounded-full shadow-[0_0_30px_rgba(168,85,247,0.4)] mb-3 backdrop-blur-sm border-2 border-purple-400/50 overflow-hidden flex items-center justify-center shrink-0">
+            {logo ? <img src={logo} alt="Logo" className="w-full h-full object-cover" /> : <Coffee className="w-10 h-10 text-purple-200"/>}
           </div>
-          <h1 className="text-2xl font-black text-white mb-0.5 tracking-tight drop-shadow-lg">{CAFE_NAME}</h1>
+          <h1 className="text-3xl font-black text-white mb-1 tracking-tight drop-shadow-lg">{CAFE_NAME}</h1>
           <p className="text-purple-300 text-xs font-medium tracking-wide">Good food travels better.</p>
         </div>
 
-        <div className="relative flex flex-col items-center justify-center bg-white/5 backdrop-blur-md p-6 rounded-[2.5rem] border border-white/10 shadow-2xl w-full">
-          <div className="text-xs font-black uppercase tracking-widest text-purple-300 mb-4">Select Your Table</div>
-          <div className="flex items-center gap-4 mb-4">
-            <button onClick={() => { playSfx('click'); setWi(p => Math.max(p - 1, 0)); }} className="p-3 bg-purple-800/80 rounded-full hover:bg-purple-700 shadow-lg text-white"><Minus className="w-5 h-5"/></button>
-            <div className="w-24 h-24 bg-white text-purple-950 rounded-full flex items-center justify-center text-5xl font-black shadow-[0_0_40px_rgba(255,255,255,0.2)] border-4 border-purple-400/50 z-20 transition-all">
-              {currentTable.name}
-            </div>
-            <button onClick={() => { playSfx('click'); setWi(p => Math.min(p + 1, sortedTables.length - 1)); }} className="p-3 bg-purple-800/80 rounded-full hover:bg-purple-700 shadow-lg text-white"><Plus className="w-5 h-5"/></button>
-          </div>
-
-          {isBooked ? (
-            <div className="bg-red-500/20 border border-red-500 text-red-200 px-4 py-2 rounded-xl font-bold text-xs mb-3 text-center">
-              Table {currentTable.name} is already booked.
-            </div>
-          ) : null}
-
+        <div className="relative flex flex-col items-center justify-center bg-white/5 backdrop-blur-md p-8 rounded-[2.5rem] border border-white/10 shadow-2xl w-full text-center space-y-4">
+          <QrCode className="w-16 h-16 text-purple-300 mx-auto animate-pulse" />
+          <h2 className="text-xl font-black text-white">Scan Table QR to Order</h2>
+          <p className="text-xs text-purple-200 font-medium leading-relaxed">Please scan the QR code placed on your table using your phone camera to view the menu and place your order instantly.</p>
           <button 
-            disabled={isBooked || checkingLoc}
-            onClick={handleJoinClick} 
-            className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-40 text-white font-black text-lg py-3.5 rounded-full shadow-[0_8px_25px_rgba(147,51,234,0.4)] active:scale-95 transition-all flex items-center justify-center gap-2"
+            onClick={startScanner} 
+            className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-base py-4 rounded-full shadow-[0_8px_25px_rgba(147,51,234,0.4)] active:scale-95 transition-all flex items-center justify-center gap-2"
           >
-            {checkingLoc ? <Clock className="w-5 h-5 animate-spin" /> : null}
-            {checkingLoc ? 'Checking Location...' : (isBooked ? 'Already Booked' : 'JOIN TABLE')}
+            <Camera className="w-5 h-5" /> Open Camera Scanner
           </button>
         </div>
       </div>
@@ -441,24 +387,9 @@ function LandingView({ tables, activeOrders, logo, cafeConfig, onJoin, onAdminLo
         <div className="text-purple-200 flex items-center justify-center gap-1">Made with love ❤️</div>
       </footer>
 
-      {showModal && (
-        <Modal title={`Join Table ${currentTable.name}`} onClose={() => setShowModal(false)}>
-          {locError ? (
-            <div className="space-y-4 text-center">
-              <div className="bg-red-50 text-red-600 p-4 rounded-2xl font-bold text-sm border border-red-200 flex flex-col items-center gap-2">
-                <MapPin className="w-8 h-8 text-red-500 animate-bounce" />
-                {locError}
-              </div>
-              <button onClick={() => setShowModal(false)} className="w-full bg-slate-800 text-white font-black py-3 rounded-xl">Close</button>
-            </div>
-          ) : (
-            <form onSubmit={handleProceed} className="space-y-4">
-              <div className="bg-emerald-50 text-emerald-800 p-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5"><MapPin className="w-4 h-4 text-emerald-600"/> Location verified successfully (Inside Cafe)</div>
-              <div><label className="text-xs font-bold text-slate-500 uppercase">Your Name</label><input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Rahul Sharma" className={inpStyle} required /></div>
-              <div><label className="text-xs font-bold text-slate-500 uppercase">WhatsApp Phone Number</label><input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="e.g. 9876543210" className={inpStyle} required maxLength={10} /></div>
-              <button type="submit" className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-4 rounded-xl mt-2 shadow-lg">Start Ordering</button>
-            </form>
-          )}
+      {showScanner && (
+        <Modal title="Scan Table QR" onClose={() => setShowScanner(false)}>
+          <div id="qr-reader" className="w-full rounded-2xl overflow-hidden"></div>
         </Modal>
       )}
 
@@ -995,7 +926,7 @@ function TablesAndQRTab({ tables, logo, db }) {
   return (
     <div className="space-y-8 max-w-4xl">
       <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm">
-        <h2 className="text-xl font-black text-slate-900 mb-4">Manage Restaurant Tables</h2>
+        <h2 className="text-xl font-black text-slate-900 mb-4">Manage Restaurant Tables & QR Generation</h2>
         <form onSubmit={addTable} className="flex gap-3 mb-6">
           <input type="text" placeholder="Enter Table No e.g. 1, 2, VIP1" value={newTableName} onChange={e => setNewTableName(e.target.value)} className={inpStyle} required />
           <button type="submit" className="bg-purple-700 hover:bg-purple-800 text-white px-6 py-3 rounded-xl font-bold shrink-0 flex items-center gap-2"><Plus className="w-5 h-5"/> Add Table</button>
