@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Coffee, Utensils, Plus, Minus, ChevronLeft, LayoutDashboard, LogOut,
   CheckCircle, Clock, ChefHat, Bell, Edit, Trash2, ToggleLeft, ToggleRight, QrCode, Printer,
-  CreditCard, Banknote, X, History, Download, Image as ImageIcon, Package, AlertTriangle, Upload, IceCream, Lock, Eye, EyeOff, Settings, Volume2, VolumeX, Mic, Search, MessageSquare, Tag, Wallet, MapPin, Camera
+  CreditCard, Banknote, X, History, Download, Image as ImageIcon, Package, AlertTriangle, Upload, IceCream, Lock, Eye, EyeOff, Settings, Volume2, VolumeX, Mic, Search, MessageSquare, Tag, Wallet, MapPin, Camera, Check
 } from 'lucide-react';
 
 /* ---------------- AUDIO & VOICE ENGINE ---------------- */
@@ -373,7 +373,7 @@ function DelBtn({ onDel }) {
   return <button onClick={() => { playSfx('click'); if (a) onDel(); else setA(true); }} className={`p-2 rounded-xl transition-colors text-xs font-black shrink-0 ${a ? 'bg-red-600 text-white' : 'bg-slate-50 text-slate-400 hover:text-red-600 hover:bg-red-50'}`}>{a ? 'Sure?' : <Trash2 className="w-4 h-4"/>}</button>;
 }
 
-/* ---------------- LANDING VIEW WITH SIMPLE STATEMENT TO USE GOOGLE LENS ---------------- */
+/* ---------------- LANDING VIEW ---------------- */
 function LandingView({ logo, onAdminLogin }) {
   const [showLogin, setShowLogin] = useState(false);
 
@@ -423,7 +423,7 @@ function AdminLoginModal({ onClose, onSuccess }) {
   );
 }
 
-/* ---------------- CUSTOMER VIEW WITH DIRECT QR BINDING & 5 BANNERS ---------------- */
+/* ---------------- CUSTOMER VIEW ---------------- */
 function CustomerView({ tableNumber, customerName, customerPhone, menuItems, activeOrders, coupons, cafeConfig, onPlaceOrder, onExit }) {
   const [cart, setCart] = useState([]); 
   const [checkout, setCheckout] = useState(false);
@@ -825,7 +825,7 @@ function AdminDashboard(p) {
         </header>
         <div className="flex-1 overflow-y-auto p-4 md:p-6 flex flex-col justify-between">
           <div>
-            {tab === 'orders' && <OrdersBoard orders={p.activeOrders} updateStatus={updateStatus} cancelOrder={p.cancelOrder} />}
+            {tab === 'orders' && <OrdersBoard orders={p.activeOrders} updateStatus={updateStatus} cancelOrder={p.cancelOrder} menuItems={p.menuItems} db={p.db} />}
             {tab === 'menu' && <MenuTab menuItems={p.menuItems} db={p.db} />}
             {tab === 'inventory' && <InventoryTab stockInv={p.stockInv} iceInv={p.iceInv} db={p.db} />}
             {tab === 'petty' && <PettyExpenseTab pettyExpenses={p.pettyExpenses} db={p.db} />}
@@ -854,19 +854,24 @@ function SideBtn({ icon, label, active, onClick, badge }) {
   );
 }
 
-/* ---------------- 4-COLUMN ORDERS BOARD ---------------- */
-function OrdersBoard({ orders, updateStatus, cancelOrder }) {
+/* ---------------- 4-COLUMN ORDERS BOARD WITH EDIT/CUSTOMIZE ---------------- */
+function OrdersBoard({ orders, updateStatus, cancelOrder, menuItems, db }) {
+  const [editingOrder, setEditingOrder] = useState(null);
+
   const col = (s) => orders.filter(o => o.status === s);
   return (
     <div className="flex gap-4 h-full min-w-max pb-4 overflow-x-auto">
-      <AdminCol title="Verify Payment" icon={<CreditCard/>} list={col('Verifying')} bg="bg-indigo-50" text="text-indigo-900" action="Payment Received & Accept" color="bg-indigo-600" onAction={(id) => updateStatus(id, 'Pending')} onCancel={cancelOrder} />
-      <AdminCol title="New Orders" icon={<Bell/>} list={col('Pending')} bg="bg-purple-50" text="text-purple-900" action="Accept & Prep" color="bg-purple-600" onAction={(id) => updateStatus(id, 'Preparing')} onCancel={cancelOrder} blink />
-      <AdminCol title="In Kitchen" icon={<ChefHat/>} list={col('Preparing')} bg="bg-amber-50" text="text-amber-900" action="Mark as Ready" color="bg-amber-500" onAction={(id) => updateStatus(id, 'Ready')} onCancel={cancelOrder} />
-      <AdminCol title="Ready to Serve" icon={<CheckCircle/>} list={col('Ready')} bg="bg-green-50" text="text-green-900" action="Complete & Send Bill" color="bg-green-600" onAction={(id) => updateStatus(id, 'Completed')} onCancel={cancelOrder} />
+      <AdminCol title="Verify Payment" icon={<CreditCard/>} list={col('Verifying')} bg="bg-indigo-50" text="text-indigo-900" action="Payment Received & Accept" color="bg-indigo-600" onAction={(id) => updateStatus(id, 'Pending')} onCancel={cancelOrder} onEdit={(o) => setEditingOrder(o)} />
+      <AdminCol title="New Orders" icon={<Bell/>} list={col('Pending')} bg="bg-purple-50" text="text-purple-900" action="Accept & Prep" color="bg-purple-600" onAction={(id) => updateStatus(id, 'Preparing')} onCancel={cancelOrder} onEdit={(o) => setEditingOrder(o)} blink />
+      <AdminCol title="In Kitchen" icon={<ChefHat/>} list={col('Preparing')} bg="bg-amber-50" text="text-amber-900" action="Mark as Ready" color="bg-amber-500" onAction={(id) => updateStatus(id, 'Ready')} onCancel={cancelOrder} onEdit={(o) => setEditingOrder(o)} />
+      <AdminCol title="Ready to Serve" icon={<CheckCircle/>} list={col('Ready')} bg="bg-green-50" text="text-green-900" action="Complete & Send Bill" color="bg-green-600" onAction={(id) => updateStatus(id, 'Completed')} onCancel={cancelOrder} onEdit={(o) => setEditingOrder(o)} />
+
+      {editingOrder && <CustomizeOrderModal order={editingOrder} menuItems={menuItems} db={db} onClose={() => setEditingOrder(null)} />}
     </div>
   );
 }
-function AdminCol({ title, icon, list, bg, text, action, color, onAction, onCancel, blink }) {
+
+function AdminCol({ title, icon, list, bg, text, action, color, onAction, onCancel, onEdit, blink }) {
   return (
     <div className="w-80 flex flex-col bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden shrink-0">
       <div className={`${bg} px-5 py-4 border-b border-slate-200 flex justify-between items-center`}><h3 className={`font-black flex items-center gap-2 ${text}`}><span className="opacity-80">{icon}</span> {title}</h3><span className={`bg-white ${text} text-xs font-black px-3 py-1.5 rounded-lg border shadow-sm`}>{list.length}</span></div>
@@ -875,10 +880,26 @@ function AdminCol({ title, icon, list, bg, text, action, color, onAction, onCanc
         {list.map(o => (
           <div key={o.id} className={`bg-white p-5 rounded-2xl shadow-sm border-2 ${blink ? 'border-purple-400 shadow-[0_0_20px_rgba(168,85,247,0.2)]' : 'border-slate-100'}`}>
             <div className="flex justify-between items-start mb-3 border-b border-slate-100 pb-3">
-              <div><h4 className="text-xl font-black text-slate-900">Table {o.table}</h4><p className="text-xs font-bold text-purple-700">{o.customerName || 'Guest'} ({o.customerPhone || 'N/A'})</p><span className="text-xs text-slate-400 font-mono font-bold">#{o.id}</span></div>
-              <div className="text-xl font-black text-purple-700">₹{o.total}</div>
+              <div>
+                <h4 className="text-xl font-black text-slate-900">Table {o.table}</h4>
+                <p className="text-xs font-bold text-purple-700">{o.customerName || 'Guest'} ({o.customerPhone || 'N/A'})</p>
+                <span className="text-xs text-slate-400 font-mono font-bold">#{o.id}</span>
+              </div>
+              <div className="flex flex-col items-end">
+                <div className="text-xl font-black text-purple-700">₹{o.total}</div>
+                <button onClick={() => { playSfx('click'); onEdit(o); }} className="mt-1 text-[11px] bg-purple-100 text-purple-800 px-2 py-0.5 rounded-md font-bold flex items-center gap-1 hover:bg-purple-200"><Edit className="w-3 h-3"/> Customize</button>
+              </div>
             </div>
-            <div className="mb-4 space-y-1.5">{o.items.map((it, i) => <div key={i} className="flex gap-2 text-sm text-slate-700 font-bold"><span className="bg-purple-100 text-purple-800 text-xs px-1.5 py-0.5 rounded-md">{it.qty}x</span><span>{it.name}</span></div>)}
+            <div className="mb-4 space-y-2">
+              {o.items.map((it, i) => (
+                <div key={i} className="flex justify-between items-center text-xs text-slate-700 font-bold bg-slate-50 p-2 rounded-xl">
+                  <div className="flex items-center gap-2">
+                    <span className="bg-purple-200 text-purple-900 px-1.5 py-0.5 rounded text-[10px]">{it.qty}x</span>
+                    <span>{it.name}</span>
+                  </div>
+                  <span className="text-purple-700 font-black">₹{it.price * it.qty} (₹{it.price} ea)</span>
+                </div>
+              ))}
               <div className="pt-3 mt-2 border-t border-dashed border-slate-200 flex justify-between items-center text-xs font-black uppercase"><span className="text-slate-500">Method:</span><span className={`px-2 py-1 rounded-md ${o.payment === 'Online' ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700'}`}>{o.payment}</span></div>
             </div>
             <div className="flex gap-2 mt-2"><button onClick={() => onAction(o.id)} className={`flex-1 py-3 rounded-xl font-black text-white shadow-md active:scale-95 transition-transform text-sm ${color}`}>{action}</button><DelBtn onDel={() => onCancel(o.id)} /></div>
@@ -886,6 +907,104 @@ function AdminCol({ title, icon, list, bg, text, action, color, onAction, onCanc
         ))}
       </div>
     </div>
+  );
+}
+
+function CustomizeOrderModal({ order, menuItems, db, onClose }) {
+  const [items, setItems] = useState(order.items || []);
+  const [selectedMenuId, setSelectedMenuId] = useState('');
+  const [selectedVariant, setSelectedVariant] = useState('');
+
+  const selectedItemObj = menuItems.find(m => m.id === selectedMenuId);
+
+  const addItemToOrder = () => {
+    if (!selectedItemObj) return playSfx('error');
+    playSfx('add');
+
+    let itemName = selectedItemObj.name;
+    let itemPrice = selectedItemObj.price;
+
+    if (selectedItemObj.v && selectedItemObj.v.length > 0) {
+      const vObj = selectedItemObj.v.find(x => x[0] === selectedVariant) || selectedItemObj.v[0];
+      itemName = `${selectedItemObj.name} (${vObj[0]})`;
+      itemPrice = vObj[1];
+    }
+
+    const key = selectedItemObj.id + '_' + (selectedVariant || 'default');
+    const existing = items.find(i => (i.key || i.name) === key);
+
+    if (existing) {
+      setItems(items.map(i => (i.key || i.name) === key ? { ...i, qty: i.qty + 1 } : i));
+    } else {
+      setItems([...items, { key, name: itemName, price: itemPrice, qty: 1 }]);
+    }
+  };
+
+  const updateQty = (key, delta) => {
+    playSfx('click');
+    setItems(items.map(i => {
+      const k = i.key || i.name;
+      if (k === key) {
+        return { ...i, qty: i.qty + delta };
+      }
+      return i;
+    }).filter(i => i.qty > 0));
+  };
+
+  const saveCustomizedOrder = async () => {
+    playSfx('save');
+    const newTotal = items.reduce((s, i) => s + (i.price * i.qty), 0);
+    const finalTotal = Math.max(0, newTotal - (order.discount || 0));
+
+    await updateDoc(doc(db, 'orders', order.id), {
+      items,
+      total: finalTotal,
+      originalTotal: newTotal
+    });
+    onClose();
+  };
+
+  return (
+    <Modal title={`Customize Order #${order.id} (Table ${order.table})`} onClose={onClose}>
+      <div className="space-y-4">
+        <div className="bg-purple-50 p-3 rounded-2xl border">
+          <p className="text-xs font-bold text-purple-700 uppercase mb-2">Current Order Items & Individual Prices</p>
+          <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+            {items.map((it, idx) => (
+              <div key={idx} className="flex justify-between items-center bg-white p-2.5 rounded-xl border text-xs font-bold">
+                <span className="flex-1">{it.name}</span>
+                <div className="flex items-center gap-2 mx-2">
+                  <button onClick={() => updateQty(it.key || it.name, -1)} className="px-1.5 py-0.5 bg-slate-100 rounded">-</button>
+                  <span>{it.qty}</span>
+                  <button onClick={() => updateQty(it.key || it.name, 1)} className="px-1.5 py-0.5 bg-slate-100 rounded">+</button>
+                </div>
+                <span className="text-purple-700">₹{it.price * it.qty} (₹{it.price})</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="border-t pt-3">
+          <p className="text-xs font-black text-slate-700 uppercase mb-2">Add New Item to Order</p>
+          <div className="space-y-2">
+            <select value={selectedMenuId} onChange={e => { setSelectedMenuId(e.target.value); const m = menuItems.find(x => x.id === e.target.value); if(m?.v?.length) setSelectedVariant(m.v[0][0]); }} className={inpStyle + ' py-2.5 text-xs bg-white'}>
+              <option value="">Select food item...</option>
+              {menuItems.filter(m => m.stock).map(m => <option key={m.id} value={m.id}>{m.name} (₹{m.v && m.v.length ? m.v[0][1] : m.price})</option>)}
+            </select>
+
+            {selectedItemObj?.v && selectedItemObj.v.length > 0 && (
+              <select value={selectedVariant} onChange={e => setSelectedVariant(e.target.value)} className={inpStyle + ' py-2.5 text-xs bg-white'}>
+                {selectedItemObj.v.map(v => <option key={v[0]} value={v[0]}>{v[0]} - ₹{v[1]}</option>)}
+              </select>
+            )}
+
+            <button type="button" onClick={addItemToOrder} className="w-full bg-slate-800 text-white font-bold py-2.5 rounded-xl text-xs">Add to Order List</button>
+          </div>
+        </div>
+
+        <button type="button" onClick={saveCustomizedOrder} className="w-full bg-purple-700 hover:bg-purple-800 text-white font-black py-3 rounded-xl mt-4">Save Changes</button>
+      </div>
+    </Modal>
   );
 }
 
@@ -1460,7 +1579,7 @@ function HistoryTab({ history, stockInv, iceInv, pettyExpenses, menuItems, db })
   );
 }
 
-/* ---------------- SETTINGS TAB WITH 5 BANNERS ---------------- */
+/* ---------------- SETTINGS TAB ---------------- */
 function SettingsTab({ cafeConfig, db }) {
   const logoRef = useRef(null);
   const [upi, setUpi] = useState(cafeConfig.upiId || 'snehaltitkare58-2@okicici');
