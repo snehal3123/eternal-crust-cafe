@@ -69,7 +69,7 @@ const initialTables = Array.from({ length: 10 }, (_, i) => ({ id: `t${i + 1}`, n
 
 /* ---------------- FIREBASE CONFIG ---------------- */
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc } from "firebase/firestore";
+import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc, getDocs } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAsmMqePWXD27z7EMAOUetSC5HqV03ScpM",
@@ -139,12 +139,30 @@ export default function App() {
       if (snap.exists()) {
         const configData = snap.data();
         setCafeConfig(configData);
+      }
+    });
+
+    const unsubOrders = onSnapshot(collection(db, 'orders'), async (snap) => {
+      const ordersList = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+      setActiveOrders(ordersList);
+
+      // If customer scanned table QR, perform Geofence Location Check & Table Occupied Check
+      const params = new URLSearchParams(window.location.search);
+      const urlTable = params.get('table');
+      if (urlTable && mode === 'verifying_location') {
+        const activeOrdersSnapshot = ordersList;
+        // Check if table is already occupied with an active order
+        const isTableOccupied = activeOrdersSnapshot.some(o => String(o.table) === String(urlTable));
         
-        // If customer scanned table QR, perform Geofence Location Check
-        const params = new URLSearchParams(window.location.search);
-        const urlTable = params.get('table');
-        if (urlTable && mode === 'verifying_location') {
-          verifyCustomerLocation(configData, urlTable);
+        if (isTableOccupied && !localStorage.getItem('ec_active_table')) {
+          setLocationError(`Table ${urlTable} is currently occupied! Please choose another table or wait until the current order is completed.`);
+          setLocationChecking(false);
+        } else {
+          // Fetch config to verify location
+          const cfgSnap = await doc(db, 'settings', 'config');
+          // We already have cafeConfig from state or we can use default values
+          const cfg = cafeConfig;
+          verifyCustomerLocation(cfg, urlTable, activeOrdersSnapshot);
         }
       }
     });
@@ -163,10 +181,6 @@ export default function App() {
         });
         setMenuItems(docs);
       }
-    });
-
-    const unsubOrders = onSnapshot(collection(db, 'orders'), (snap) => {
-      setActiveOrders(snap.docs.map(d => ({ ...d.data(), id: d.id })));
     });
 
     const unsubHistory = onSnapshot(collection(db, 'history'), (snap) => {
@@ -210,7 +224,23 @@ export default function App() {
     };
   }, []);
 
-  const verifyCustomerLocation = (cfg, tblName) => {
+  const verifyCustomerLocation = (cfg, tblName, activeOrdersList) => {
+    // If already in session for this table, bypass check
+    if (localStorage.getItem('ec_active_table') === String(tblName)) {
+      setTable(tblName);
+      setLocationVerified(true);
+      setMode('customer');
+      return;
+    }
+
+    // Check if table is occupied
+    const isOccupied = activeOrdersList.some(o => String(o.table) === String(tblName));
+    if (isOccupied) {
+      setLocationError(`Table ${tblName} is currently occupied! Please choose another table or wait until the current order is completed.`);
+      setLocationChecking(false);
+      return;
+    }
+
     setLocationChecking(true);
     if (!navigator.geolocation) {
       setLocationError("Geolocation is not supported by your browser.");
@@ -340,7 +370,7 @@ ${discountLine}*Total : ₹${o.total}*
             {locationError && (
               <>
                 <AlertTriangle className="w-16 h-16 text-red-400 mx-auto mb-4" />
-                <h2 className="text-xl font-black text-white mb-2">Access Restricted</h2>
+                <h2 className="text-xl font-black text-white mb-2">Table Occupied / Access Restricted</h2>
                 <p className="text-xs text-red-200 mb-6 leading-relaxed">{locationError}</p>
                 <button onClick={() => window.location.href = window.location.pathname} className="w-full bg-purple-700 text-white font-black py-3 rounded-xl">Try Again</button>
               </>
