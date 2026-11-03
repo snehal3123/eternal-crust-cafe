@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+Import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Coffee, Utensils, Plus, Minus, ChevronLeft, LayoutDashboard, LogOut,
   CheckCircle, Clock, ChefHat, Bell, Edit, Trash2, ToggleLeft, ToggleRight, QrCode, Printer,
-  CreditCard, Banknote, X, History, Download, Image as ImageIcon, Package, AlertTriangle, Upload, IceCream, Lock, Eye, EyeOff, Settings, Volume2, VolumeX, Mic, Search, MessageSquare, Tag, Wallet, MapPin, Camera, Check
+  Banknote, X, History, Download, Image as ImageIcon, Package, AlertTriangle, Upload, IceCream, Lock, Eye, EyeOff, Settings, Volume2, VolumeX, Mic, Search, Tag, Wallet, MapPin
 } from 'lucide-react';
 
 /* ---------------- AUDIO & VOICE ENGINE ---------------- */
@@ -84,9 +84,8 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-/* Helper function for Geofence Distance calculation */
 const getDistanceFromLatLonInMeters = (lat1, lon1, lat2, lon2) => {
-  const R = 6371000; // Radius of earth in meters
+  const R = 6371000;
   const dLat = (lat2 - lat1) * (Math.PI / 180);
   const dLon = (lon2 - lon1) * (Math.PI / 180);
   const a =
@@ -113,7 +112,7 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     const urlTable = params.get('table');
     if (urlTable) {
-      return 'verifying_location'; // First verify location before opening customer view
+      return 'verifying_location';
     }
     if (localStorage.getItem('ec_admin_auth') === 'true') return 'admin';
     if (sessionTable) return 'customer';
@@ -140,7 +139,6 @@ export default function App() {
         const configData = snap.data();
         setCafeConfig(configData);
         
-        // If customer scanned table QR, perform Geofence Location Check
         const params = new URLSearchParams(window.location.search);
         const urlTable = params.get('table');
         if (urlTable && mode === 'verifying_location') {
@@ -249,8 +247,33 @@ export default function App() {
   const placeOrder = async (tbl, cart, total, payment, name, phone, discount = 0) => {
     const numericId = Math.floor(10000 + Math.random() * 90000).toString();
     const finalTotal = Math.max(0, total - discount);
-    const newOrder = { id: numericId, table: tbl, customerName: name, customerPhone: phone, items: cart, total: finalTotal, originalTotal: total, discount, payment, status: payment === 'Online' ? 'Verifying' : 'Pending', time: Date.now() };
-    await setDoc(doc(db, 'orders', numericId), newOrder);
+    
+    // Check if an active order already exists for this table
+    const existingActiveOrder = activeOrders.find(o => o.table === String(tbl) && o.status !== 'Completed');
+
+    if (existingActiveOrder) {
+      // Append to existing active order
+      const mergedItems = [...existingActiveOrder.items];
+      cart.forEach(newItem => {
+        const found = mergedItems.find(mi => (mi.key || mi.name) === (newItem.key || newItem.name));
+        if (found) {
+          found.qty += newItem.qty;
+        } else {
+          mergedItems.push(newItem);
+        }
+      });
+      const newOriginalTotal = mergedItems.reduce((s, i) => s + (i.price * i.qty), 0);
+      const newFinalTotal = Math.max(0, newOriginalTotal - discount);
+
+      await updateDoc(doc(db, 'orders', existingActiveOrder.id), {
+        items: mergedItems,
+        total: newFinalTotal,
+        originalTotal: newOriginalTotal
+      });
+    } else {
+      const newOrder = { id: numericId, table: tbl, customerName: name, customerPhone: phone, items: cart, total: finalTotal, originalTotal: total, discount, payment, status: 'Pending', time: Date.now() };
+      await setDoc(doc(db, 'orders', numericId), newOrder);
+    }
     playSfx('success');
   };
 
@@ -292,8 +315,6 @@ ${discountLine}*Total : ₹${o.total}*
       const wpUrl = `https://wa.me/91${o.customerPhone}?text=${encodeURIComponent(billText)}`;
       window.open(wpUrl, '_blank');
     }
-
-    exitTable();
   };
 
   const cancelOrder = async (id) => {
@@ -349,8 +370,8 @@ ${discountLine}*Total : ₹${o.total}*
         </div>
       )}
       {mode === 'landing' && <LandingView logo={cafeConfig.logo} onAdminLogin={adminLoginSuccess} />}
-      {mode === 'customer' && <CustomerView tableNumber={table} customerName={customerName} customerPhone={customerPhone} menuItems={menuItems} activeOrders={activeOrders} coupons={coupons} cafeConfig={cafeConfig} onPlaceOrder={placeOrder} onExit={exitTable} />}
-      {mode === 'admin' && isAdminAuth && <AdminDashboard {...{ activeOrders, setActiveOrders, orderHistory, setOrderHistory, completeOrder, cancelOrder, menuItems, setMenuItems, tables, setTables, stockInv, setStockInv, iceInv, setIceInv, pettyExpenses, setPettyExpenses, coupons, setCoupons, cafeConfig, db }} onExit={adminLogout} />}
+      {mode === 'customer' && <CustomerView tableNumber={table} customerName={customerName} customerPhone={customerPhone} menuItems={menuItems} activeOrders={activeOrders} orderHistory={orderHistory} coupons={coupons} cafeConfig={cafeConfig} onPlaceOrder={placeOrder} onExit={exitTable} />}
+      {mode === 'admin' && isAdminAuth && <AdminDashboard {...{ activeOrders, setActiveOrders, orderHistory, setOrderHistory, completeOrder, cancelOrder, menuItems, setMenuItems, tables, setTables, stockInv, setStockInv, iceInv, setIceInv, pettyExpenses, setPettyExpenses, coupons, setCoupons, cafeConfig, db, placeOrder }} onExit={adminLogout} />}
     </div>
   );
 }
@@ -401,7 +422,6 @@ function LandingView({ logo, onAdminLogin }) {
 
       <footer className="py-2 text-center text-purple-300/70 text-[10px] font-bold tracking-wider shrink-0 space-y-0.5">
         <div>© 2026 {CAFE_NAME}. All rights reserved.</div>
-        <div className="text-purple-200 flex items-center justify-center gap-1">Made with love ❤️</div>
       </footer>
 
       {showLogin && <AdminLoginModal onClose={() => setShowLogin(false)} onSuccess={onAdminLogin} />}
@@ -424,9 +444,10 @@ function AdminLoginModal({ onClose, onSuccess }) {
 }
 
 /* ---------------- CUSTOMER VIEW ---------------- */
-function CustomerView({ tableNumber, customerName, customerPhone, menuItems, activeOrders, coupons, cafeConfig, onPlaceOrder, onExit }) {
+function CustomerView({ tableNumber, customerName, customerPhone, menuItems, activeOrders, orderHistory, coupons, cafeConfig, onPlaceOrder, onExit }) {
   const [cart, setCart] = useState([]); 
   const [checkout, setCheckout] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [selectedCoupon, setSelectedCoupon] = useState(null);
   const [couponCodeInput, setCouponCodeInput] = useState('');
   const [couponError, setCouponError] = useState('');
@@ -472,7 +493,7 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
   const total = Math.max(0, rawTotal - discountAmount);
   const count = cart.reduce((s, c) => s + c.qty, 0);
 
-  const tableOrder = activeOrders.find(o => o.table === String(tableNumber));
+  const tableOrder = activeOrders.find(o => o.table === String(tableNumber) && o.status !== 'Completed');
   const status = tableOrder ? tableOrder.status : null;
 
   const prevStatus = useRef(status);
@@ -553,6 +574,8 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
     return list;
   }, [menuItems, activeCat, searchQuery, sortOrder]);
 
+  const customerPastOrders = orderHistory.filter(o => o.customerPhone && customerPhone && o.customerPhone === customerPhone);
+
   return (
     <div className="bg-purple-950 fixed inset-0 flex justify-center overflow-hidden">
       <div className="bg-slate-50 w-full max-w-md mx-auto sm:rounded-[2.5rem] sm:shadow-2xl overflow-hidden flex flex-col h-full relative text-slate-800">
@@ -571,13 +594,27 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
           </div>
         )}
 
+        {showHistoryModal && (
+          <Modal title="Your Order History" onClose={() => setShowHistoryModal(false)}>
+            <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+              {customerPastOrders.length > 0 ? customerPastOrders.map(o => (
+                <div key={o.id} className="bg-purple-50 p-3.5 rounded-2xl border text-xs font-bold space-y-1">
+                  <div className="flex justify-between text-purple-900"><span className="font-black">Order #{o.id}</span><span>{new Date(o.completedAt || o.time).toLocaleDateString()}</span></div>
+                  <p className="text-slate-600 font-medium">{o.items.map(i => `${i.qty}x ${i.name}`).join(', ')}</p>
+                  <div className="flex justify-between pt-2 border-t border-purple-200 text-purple-950 font-black"><span>Total: ₹{o.total}</span><span className="text-emerald-700">Completed</span></div>
+                </div>
+              )) : <p className="text-xs text-slate-400 font-bold text-center py-6">No past completed orders found.</p>}
+            </div>
+          </Modal>
+        )}
+
         <header className="bg-purple-900 px-4 pt-4 pb-3 text-white shadow-md z-10 shrink-0">
           <div className="flex items-center justify-between mb-3">
-            {onExit && status !== 'Pending' && status !== 'Preparing' && status !== 'Verifying' ? (
-              <button onClick={() => { playSfx('click'); onExit(); }} className="p-2 -ml-2 bg-purple-800 rounded-full flex items-center gap-1 text-xs font-bold"><ChevronLeft className="w-4 h-4"/> Exit</button>
-            ) : <div className="w-9 h-9" />}
+            <button onClick={() => { playSfx('click'); setShowHistoryModal(true); }} className="p-2 -ml-2 bg-purple-800 rounded-full flex items-center gap-1 text-xs font-bold"><History className="w-4 h-4"/> Orders</button>
             <div className="bg-purple-950/50 px-4 py-1.5 rounded-full border border-purple-700/50"><h1 className="text-sm font-black tracking-widest uppercase text-purple-200">Table {tableNumber} | {customerName || 'Guest'}</h1></div>
-            <div className="w-9 h-9" />
+            {onExit && status !== 'Pending' && status !== 'Preparing' ? (
+              <button onClick={() => { playSfx('click'); onExit(); }} className="p-2 -mr-2 bg-purple-800 rounded-full flex items-center gap-1 text-xs font-bold"><ChevronLeft className="w-4 h-4"/> Exit</button>
+            ) : <div className="w-9 h-9" />}
           </div>
 
           <div className="flex gap-2 mb-3">
@@ -632,15 +669,9 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
               </div>
             </div>
 
-            {status === 'Verifying' && <PaymentTimer order={tableOrder} upiId={cafeConfig.upiId} />}
             {status === 'Pending' && <div className="bg-purple-100 border-l-4 border-purple-600 text-purple-900 p-4 rounded-2xl mb-4 shadow-sm"><p className="font-black text-lg">Order Placed!</p><p className="text-sm opacity-80">Waiting for restaurant confirmation.</p></div>}
             {status === 'Preparing' && <div className="bg-blue-100 border-l-4 border-blue-600 text-blue-900 p-4 rounded-2xl mb-4 shadow-sm"><p className="font-black text-lg">Preparing Order 👨‍🍳</p><p className="text-sm opacity-80">Kitchen is cooking your delicious meal.</p></div>}
             {status === 'Ready' && <div className="bg-green-100 border-l-4 border-green-600 text-green-900 p-4 rounded-2xl mb-4 shadow-sm animate-bounce"><p className="font-black text-xl">Your Order is Ready! 🎉</p><p className="text-sm opacity-80">Please pick it up from the counter.</p></div>}
-            {tableOrder && (status === 'Preparing' || status === 'Ready' || status === 'Completed') && (
-              <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 p-3 rounded-2xl mb-4 text-xs font-bold">
-                ✅ Payment Verified! Successfully paid ₹{tableOrder.total} via {tableOrder.payment}.
-              </div>
-            )}
 
             <div className="space-y-3 pb-24">
               {displayedMenu.filter(i => i.stock).map(it => (
@@ -677,7 +708,6 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
 
           <footer className="py-3 text-center text-slate-400 text-[10px] font-bold tracking-wider mt-4 border-t space-y-0.5">
             <div>© 2026 {CAFE_NAME}. All rights reserved.</div>
-            <div className="text-slate-500 flex items-center justify-center gap-1">Made with love ❤️</div>
           </footer>
         </main>
 
@@ -721,8 +751,7 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
 
               <p className="font-bold text-slate-400 text-xs mb-3 uppercase tracking-widest">Select Payment</p>
               <div className="space-y-3">
-                <button onClick={() => { playSfx('click'); onPlaceOrder(tableNumber, cart, total, 'Online', customerName, customerPhone, discountAmount); setCart([]); setCheckout(false); }} className="w-full flex items-center p-4 border-2 border-purple-200 rounded-2xl bg-white hover:bg-purple-50 transition-colors"><div className="bg-purple-100 p-3 rounded-xl text-purple-700 mr-4"><CreditCard className="w-6 h-6"/></div><div><h4 className="font-bold text-slate-800 text-lg">Pay via UPI / GPay</h4><p className="text-xs text-slate-500 font-medium">Fast & secure online payment</p></div></button>
-                <button onClick={() => { playSfx('click'); onPlaceOrder(tableNumber, cart, total, 'Cash', customerName, customerPhone, discountAmount); setCart([]); setCheckout(false); }} className="w-full flex items-center p-4 border-2 border-slate-200 rounded-2xl bg-white hover:bg-slate-50 transition-colors"><div className="bg-slate-100 p-3 rounded-xl text-slate-600 mr-4"><Banknote className="w-6 h-6"/></div><div><h4 className="font-bold text-slate-800 text-lg">Cash on Delivery</h4><p className="text-xs text-slate-500 font-medium">Pay directly to the waiter</p></div></button>
+                <button onClick={() => { playSfx('click'); onPlaceOrder(tableNumber, cart, total, 'Cash', customerName, customerPhone, discountAmount); setCart([]); setCheckout(false); }} className="w-full flex items-center p-4 border-2 border-slate-200 rounded-2xl bg-white hover:bg-slate-50 transition-colors"><div className="bg-slate-100 p-3 rounded-xl text-slate-600 mr-4"><Banknote className="w-6 h-6"/></div><div><h4 className="font-bold text-slate-800 text-lg">Cash on Delivery</h4><p className="text-xs text-slate-500 font-medium">Pay directly to the waiter or counter</p></div></button>
               </div>
             </div>
           </div>
@@ -732,38 +761,18 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
   );
 }
 
-function PaymentTimer({ order, upiId }) {
-  const [tl, setTl] = useState(180);
-  useEffect(() => {
-    window.location.href = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(CAFE_NAME)}&am=${order.total}.00&cu=INR&tn=${encodeURIComponent('Table ' + order.table)}`;
-    const t = setInterval(() => setTl(p => p <= 1 ? (clearInterval(t), 0) : p - 1), 1000); return () => clearInterval(t);
-  }, [order, upiId]);
-  return (
-    <div className="bg-white p-6 rounded-3xl shadow-lg border-2 border-indigo-100 text-center mb-5 relative overflow-hidden">
-      <div className="absolute top-0 left-0 right-0 h-1 bg-indigo-100"><div className="h-full bg-indigo-600 transition-all duration-1000 linear" style={{ width: `${(tl / 180) * 100}%` }}></div></div>
-      <Clock className="w-10 h-10 text-indigo-600 mx-auto mb-3 animate-pulse"/><h3 className="text-xl font-black text-slate-800 mb-1">Verify Payment in App</h3><p className="text-sm text-slate-500 font-medium mb-4">Please complete the payment on your UPI app. The restaurant is waiting to confirm.</p>
-      <div className="text-5xl font-black text-indigo-700 tabular-nums mb-4 drop-shadow-md">{String(Math.floor(tl / 60)).padStart(2, '0')}:{String(tl % 60).padStart(2, '0')}</div>
-      {tl === 0 && <p className="text-red-500 font-bold text-sm bg-red-50 py-2 rounded-lg">Time expired. Please try ordering again or pay by cash.</p>}
-    </div>
-  );
-}
-
 /* ---------------- FULL ADMIN DASHBOARD ---------------- */
 function AdminDashboard(p) {
   const [tab, setTab] = useState('orders');
   
-  const pendingOrders = p.activeOrders.filter(o => o.status === 'Verifying' || o.status === 'Pending');
+  const pendingOrders = p.activeOrders.filter(o => o.status === 'Pending');
   
   useEffect(() => {
     if (pendingOrders.length === 0) return;
     
     playSfx('ring');
     const firstOrder = pendingOrders[0];
-    if (firstOrder.payment === 'Online') {
-      speak(`New online payment received for Table ${firstOrder.table}. Please accept.`);
-    } else {
-      speak(`New Cash on Delivery order for Table ${firstOrder.table}. Please accept.`);
-    }
+    speak(`New Cash on Delivery order for Table ${firstOrder.table}. Please accept.`);
 
     const interval = setInterval(() => {
       if (pendingOrders.length > 0) {
@@ -779,7 +788,8 @@ function AdminDashboard(p) {
   const updateStatus = async (id, st) => {
     playSfx('click');
     if (st === 'Completed') {
-      await p.completeOrder(p.activeOrders.find(o => o.id === id));
+      const orderObj = p.activeOrders.find(o => o.id === id);
+      await p.completeOrder(orderObj);
     } else {
       await updateDoc(doc(p.db, 'orders', id), { status: st });
     }
@@ -797,7 +807,7 @@ function AdminDashboard(p) {
         <div>
           <div className="p-3 md:p-5 flex items-center gap-3 border-b border-purple-900/50"><div className="bg-purple-600 p-2 rounded-xl text-white"><LayoutDashboard className="w-5 h-5"/></div><span className="font-black text-lg hidden md:block text-white">Admin Hub</span></div>
           <nav className="py-3 space-y-1 px-2 md:px-3 overflow-y-auto max-h-[calc(100vh-130px)] scrollbar-hide">
-            <SideBtn icon={<Bell/>} label="Live Orders" active={tab === 'orders'} onClick={() => { playSfx('click'); setTab('orders'); }} badge={p.activeOrders.filter(o => o.status === 'Verifying' || o.status === 'Pending').length} />
+            <SideBtn icon={<Bell/>} label="Live Orders" active={tab === 'orders'} onClick={() => { playSfx('click'); setTab('orders'); }} badge={p.activeOrders.filter(o => o.status === 'Pending').length} />
             <SideBtn icon={<Utensils/>} label="Menu Manager" active={tab === 'menu'} onClick={() => { playSfx('click'); setTab('menu'); }} />
             <SideBtn icon={<Package/>} label="Inventory" active={tab === 'inventory'} onClick={() => { playSfx('click'); setTab('inventory'); }} />
             <SideBtn icon={<Wallet/>} label="Petty Expenses" active={tab === 'petty'} onClick={() => { playSfx('click'); setTab('petty'); }} />
@@ -825,7 +835,7 @@ function AdminDashboard(p) {
         </header>
         <div className="flex-1 overflow-y-auto p-4 md:p-6 flex flex-col justify-between">
           <div>
-            {tab === 'orders' && <OrdersBoard orders={p.activeOrders} updateStatus={updateStatus} cancelOrder={p.cancelOrder} menuItems={p.menuItems} db={p.db} />}
+            {tab === 'orders' && <OrdersBoard orders={p.activeOrders} updateStatus={updateStatus} cancelOrder={p.cancelOrder} menuItems={p.menuItems} tables={p.tables} placeOrder={p.placeOrder} db={p.db} />}
             {tab === 'menu' && <MenuTab menuItems={p.menuItems} db={p.db} />}
             {tab === 'inventory' && <InventoryTab stockInv={p.stockInv} iceInv={p.iceInv} db={p.db} />}
             {tab === 'petty' && <PettyExpenseTab pettyExpenses={p.pettyExpenses} db={p.db} />}
@@ -837,7 +847,6 @@ function AdminDashboard(p) {
 
           <footer className="py-3 text-center text-slate-400 text-[11px] font-bold tracking-wider mt-6 border-t space-y-0.5">
             <div>© 2026 {CAFE_NAME}. All rights reserved.</div>
-            <div className="text-slate-500 flex items-center justify-center gap-1">Made with love ❤️</div>
           </footer>
         </div>
       </main>
@@ -854,19 +863,26 @@ function SideBtn({ icon, label, active, onClick, badge }) {
   );
 }
 
-/* ---------------- 4-COLUMN ORDERS BOARD WITH EDIT/CUSTOMIZE ---------------- */
-function OrdersBoard({ orders, updateStatus, cancelOrder, menuItems, db }) {
+/* ---------------- 3-COLUMN ORDERS BOARD WITH ADMIN ADD ORDER ---------------- */
+function OrdersBoard({ orders, updateStatus, cancelOrder, menuItems, tables, placeOrder, db }) {
   const [editingOrder, setEditingOrder] = useState(null);
+  const [showAddOrderModal, setShowAddOrderModal] = useState(false);
 
   const col = (s) => orders.filter(o => o.status === s);
   return (
-    <div className="flex gap-4 h-full min-w-max pb-4 overflow-x-auto">
-      <AdminCol title="Verify Payment" icon={<CreditCard/>} list={col('Verifying')} bg="bg-indigo-50" text="text-indigo-900" action="Payment Received & Accept" color="bg-indigo-600" onAction={(id) => updateStatus(id, 'Pending')} onCancel={cancelOrder} onEdit={(o) => setEditingOrder(o)} />
-      <AdminCol title="New Orders" icon={<Bell/>} list={col('Pending')} bg="bg-purple-50" text="text-purple-900" action="Accept & Prep" color="bg-purple-600" onAction={(id) => updateStatus(id, 'Preparing')} onCancel={cancelOrder} onEdit={(o) => setEditingOrder(o)} blink />
-      <AdminCol title="In Kitchen" icon={<ChefHat/>} list={col('Preparing')} bg="bg-amber-50" text="text-amber-900" action="Mark as Ready" color="bg-amber-500" onAction={(id) => updateStatus(id, 'Ready')} onCancel={cancelOrder} onEdit={(o) => setEditingOrder(o)} />
-      <AdminCol title="Ready to Serve" icon={<CheckCircle/>} list={col('Ready')} bg="bg-green-50" text="text-green-900" action="Complete & Send Bill" color="bg-green-600" onAction={(id) => updateStatus(id, 'Completed')} onCancel={cancelOrder} onEdit={(o) => setEditingOrder(o)} />
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <button onClick={() => { playSfx('click'); setShowAddOrderModal(true); }} className="bg-purple-700 hover:bg-purple-800 text-white font-black px-5 py-3 rounded-2xl flex items-center gap-2 shadow-md text-sm"><Plus className="w-5 h-5"/> Add Counter Order</button>
+      </div>
 
-      {editingOrder && <CustomizeOrderModal order={editingOrder} menuItems={menuItems} db={db} onClose={() => setEditingOrder(null)} />}
+      <div className="flex gap-4 min-w-max pb-4 overflow-x-auto">
+        <AdminCol title="New Orders" icon={<Bell/>} list={col('Pending')} bg="bg-purple-50" text="text-purple-900" action="Accept & Prep" color="bg-purple-600" onAction={(id) => updateStatus(id, 'Preparing')} onCancel={cancelOrder} onEdit={(o) => setEditingOrder(o)} blink />
+        <AdminCol title="In Kitchen" icon={<ChefHat/>} list={col('Preparing')} bg="bg-amber-50" text="text-amber-900" action="Mark as Ready" color="bg-amber-500" onAction={(id) => updateStatus(id, 'Ready')} onCancel={cancelOrder} onEdit={(o) => setEditingOrder(o)} />
+        <AdminCol title="Ready to Serve" icon={<CheckCircle/>} list={col('Ready')} bg="bg-green-50" text="text-green-900" action="Complete & Send Bill" color="bg-green-600" onAction={(id) => updateStatus(id, 'Completed')} onCancel={cancelOrder} onEdit={(o) => setEditingOrder(o)} />
+
+        {editingOrder && <CustomizeOrderModal order={editingOrder} menuItems={menuItems} db={db} onClose={() => setEditingOrder(null)} />}
+        {showAddOrderModal && <AdminAddOrderModal menuItems={menuItems} tables={tables} placeOrder={placeOrder} onClose={() => setShowAddOrderModal(false)} />}
+      </div>
     </div>
   );
 }
@@ -881,7 +897,7 @@ function AdminCol({ title, icon, list, bg, text, action, color, onAction, onCanc
           <div key={o.id} className={`bg-white p-5 rounded-2xl shadow-sm border-2 ${blink ? 'border-purple-400 shadow-[0_0_20px_rgba(168,85,247,0.2)]' : 'border-slate-100'}`}>
             <div className="flex justify-between items-start mb-3 border-b border-slate-100 pb-3">
               <div>
-                <h4 className="text-xl font-black text-slate-900">Table {o.table}</h4>
+                <h4 className="text-xl font-black text-slate-900">{o.table === 'Counter' ? 'Counter Order' : `Table ${o.table}`}</h4>
                 <p className="text-xs font-bold text-purple-700">{o.customerName || 'Guest'} ({o.customerPhone || 'N/A'})</p>
                 <span className="text-xs text-slate-400 font-mono font-bold">#{o.id}</span>
               </div>
@@ -900,13 +916,112 @@ function AdminCol({ title, icon, list, bg, text, action, color, onAction, onCanc
                   <span className="text-purple-700 font-black">₹{it.price * it.qty} (₹{it.price} ea)</span>
                 </div>
               ))}
-              <div className="pt-3 mt-2 border-t border-dashed border-slate-200 flex justify-between items-center text-xs font-black uppercase"><span className="text-slate-500">Method:</span><span className={`px-2 py-1 rounded-md ${o.payment === 'Online' ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700'}`}>{o.payment}</span></div>
+              <div className="pt-3 mt-2 border-t border-dashed border-slate-200 flex justify-between items-center text-xs font-black uppercase"><span className="text-slate-500">Method:</span><span className="px-2 py-1 rounded-md bg-amber-100 text-amber-700">{o.payment}</span></div>
             </div>
             <div className="flex gap-2 mt-2"><button onClick={() => onAction(o.id)} className={`flex-1 py-3 rounded-xl font-black text-white shadow-md active:scale-95 transition-transform text-sm ${color}`}>{action}</button><DelBtn onDel={() => onCancel(o.id)} /></div>
           </div>
         ))}
       </div>
     </div>
+  );
+}
+
+function AdminAddOrderModal({ menuItems, tables, placeOrder, onClose }) {
+  const [table, setTable] = useState('Counter');
+  const [custName, setCustName] = useState('');
+  const [custPhone, setCustPhone] = useState('');
+  const [cart, setCart] = useState([]);
+  const [selectedMenuId, setSelectedMenuId] = useState('');
+  const [selectedVariant, setSelectedVariant] = useState('');
+
+  const selectedItemObj = menuItems.find(m => m.id === selectedMenuId);
+
+  const addItem = () => {
+    if (!selectedItemObj) return playSfx('error');
+    playSfx('add');
+    let name = selectedItemObj.name;
+    let price = selectedItemObj.price;
+    if (selectedItemObj.v && selectedItemObj.v.length > 0) {
+      const v = selectedItemObj.v.find(x => x[0] === selectedVariant) || selectedItemObj.v[0];
+      name = `${selectedItemObj.name} (${v[0]})`;
+      price = v[1];
+    }
+    const key = selectedItemObj.id + '_' + (selectedVariant || 'default');
+    const existing = cart.find(c => c.key === key);
+    if (existing) {
+      setCart(cart.map(c => c.key === key ? { ...c, qty: c.qty + 1 } : c));
+    } else {
+      setCart([...cart, { key, name, price, qty: 1 }]);
+    }
+  };
+
+  const chgQty = (key, d) => {
+    playSfx('click');
+    setCart(cart.map(c => c.key === key ? { ...c, qty: c.qty + d } : c).filter(c => c.qty > 0));
+  };
+
+  const total = cart.reduce((s, c) => s + (c.price * c.qty), 0);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (cart.length === 0) return playSfx('error');
+    placeOrder(table, cart, total, 'Cash', custName.trim() || 'Walk-in Guest', custPhone.trim() || '');
+    onClose();
+  };
+
+  return (
+    <Modal title="Admin: Create Counter / Direct Order" onClose={onClose}>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="text-xs font-bold text-slate-500 uppercase">Table / Location</label>
+          <select value={table} onChange={e => setTable(e.target.value)} className={inpStyle + ' py-2.5 text-xs bg-white'}>
+            <option value="Counter">Counter (Takeaway)</option>
+            {tables.map(t => <option key={t.id} value={t.name}>Table {t.name}</option>)}
+          </select>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <div><label className="text-xs font-bold text-slate-500 uppercase">Customer Name</label><input type="text" value={custName} onChange={e => setCustName(e.target.value)} placeholder="e.g. Rahul" className={inpStyle + ' py-2 text-xs'} /></div>
+          <div><label className="text-xs font-bold text-slate-500 uppercase">Phone (WhatsApp)</label><input type="tel" value={custPhone} onChange={e => setCustPhone(e.target.value)} placeholder="9876543210" className={inpStyle + ' py-2 text-xs'} maxLength={10} /></div>
+        </div>
+
+        <div className="bg-slate-50 p-3 rounded-xl border">
+          <label className="text-xs font-black text-slate-700 uppercase mb-2 block">Add Items</label>
+          <div className="flex gap-2 mb-2">
+            <select value={selectedMenuId} onChange={e => { setSelectedMenuId(e.target.value); const m = menuItems.find(x => x.id === e.target.value); if(m?.v?.length) setSelectedVariant(m.v[0][0]); }} className={inpStyle + ' py-2 text-xs bg-white flex-1'}>
+              <option value="">Select menu item...</option>
+              {menuItems.filter(m => m.stock).map(m => <option key={m.id} value={m.id}>{m.name} (₹{m.v && m.v.length ? m.v[0][1] : m.price})</option>)}
+            </select>
+            {selectedItemObj?.v && selectedItemObj.v.length > 0 && (
+              <select value={selectedVariant} onChange={e => setSelectedVariant(e.target.value)} className={inpStyle + ' py-2 text-xs bg-white w-28'}>
+                {selectedItemObj.v.map(v => <option key={v[0]} value={v[0]}>{v[0]}</option>)}
+              </select>
+            )}
+            <button type="button" onClick={addItem} className="bg-purple-700 text-white px-4 py-2 rounded-xl text-xs font-bold">Add</button>
+          </div>
+
+          <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
+            {cart.map(c => (
+              <div key={c.key} className="flex justify-between items-center bg-white p-2 rounded-lg border text-xs font-bold">
+                <span className="flex-1">{c.name}</span>
+                <div className="flex items-center gap-1.5 mx-2">
+                  <button type="button" onClick={() => chgQty(c.key, -1)} className="px-1.5 bg-slate-100 rounded">-</button>
+                  <span>{c.qty}</span>
+                  <button type="button" onClick={() => chgQty(c.key, 1)} className="px-1.5 bg-slate-100 rounded">+</button>
+                </div>
+                <span>₹{c.price * c.qty}</span>
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-between items-center mt-3 pt-2 border-t font-black text-sm">
+            <span>Total:</span>
+            <span className="text-purple-700 text-lg">₹{total}</span>
+          </div>
+        </div>
+
+        <button type="submit" className="w-full bg-purple-700 text-white font-black py-3 rounded-xl">Place Order</button>
+      </form>
+    </Modal>
   );
 }
 
@@ -1144,7 +1259,7 @@ function PettyExpenseTab({ pettyExpenses, db }) {
 /* ---------------- COUPONS MANAGEMENT TAB ---------------- */
 function CouponsTab({ coupons, categories, db }) {
   const [code, setCode] = useState('');
-  const [type, setType] = useState('percent'); // 'percent' or 'flat'
+  const [type, setType] = useState('percent');
   const [value, setValue] = useState(10);
   const [category, setCategory] = useState('All');
 
@@ -1385,7 +1500,6 @@ function MenuForm({ item, categories, descriptions, onSave, onClose }) {
           <datalist id="desc-list">{descriptions.map(d => <option key={d} value={d} />)}</datalist>
         </div>
 
-        {/* Hidden Ingredients for Profit Calculation */}
         <div className="border-t pt-3">
           <div className="flex justify-between items-center mb-2"><label className="text-xs font-black text-purple-900 uppercase">Hidden Ingredients / Cost (Admin Only)</label><button type="button" onClick={addIngredient} className="text-xs bg-purple-100 text-purple-800 px-2.5 py-1 rounded-lg font-bold">+ Add</button></div>
           {ingredients.map((ing, idx) => (
@@ -1564,8 +1678,8 @@ function HistoryTab({ history, stockInv, iceInv, pettyExpenses, menuItems, db })
                   <td className="p-3 pl-6 font-mono font-bold text-slate-600 text-sm">#{o.id}</td>
                   <td className="p-3 text-sm font-bold text-slate-800">{o.customerName || 'Guest'}<br/><span className="text-[11px] text-slate-400 font-mono">{o.customerPhone || 'N/A'}</span></td>
                   <td className="p-3 text-xs text-slate-500 whitespace-nowrap">{new Date(o.completedAt || o.time).toLocaleString()}</td>
-                  <td className="p-3"><p className="font-bold text-sm">Table {o.table}</p><p className="text-[11px] text-slate-500">{o.items.map(i => `${i.qty}x ${i.name}`).join(', ')}</p></td>
-                  <td className="p-3 whitespace-nowrap"><span className={`px-2 py-1 rounded-md text-[11px] font-bold ${o.payment === 'Online' ? 'bg-indigo-50 text-indigo-700' : 'bg-amber-50 text-amber-700'}`}>{o.payment}</span></td>
+                  <td className="p-3"><p className="font-bold text-sm">{o.table === 'Counter' ? 'Counter Order' : `Table ${o.table}`}</p><p className="text-[11px] text-slate-500">{o.items.map(i => `${i.qty}x ${i.name}`).join(', ')}</p></td>
+                  <td className="p-3 whitespace-nowrap"><span className="px-2 py-1 rounded-md text-[11px] font-bold bg-amber-50 text-amber-700">{o.payment}</span></td>
                   <td className="p-3 font-black text-purple-700 text-right text-base whitespace-nowrap">₹{o.total}</td>
                   <td className="p-3 pr-6 text-right"><DelBtn onDel={() => deleteHistory(o.id)} /></td>
                 </tr>
@@ -1582,7 +1696,6 @@ function HistoryTab({ history, stockInv, iceInv, pettyExpenses, menuItems, db })
 /* ---------------- SETTINGS TAB ---------------- */
 function SettingsTab({ cafeConfig, db }) {
   const logoRef = useRef(null);
-  const [upi, setUpi] = useState(cafeConfig.upiId || 'snehaltitkare58-2@okicici');
   const [lat, setLat] = useState(cafeConfig.lat ?? 19.2183);
   const [lng, setLng] = useState(cafeConfig.lng ?? 73.1633);
   const [radius, setRadius] = useState(cafeConfig.radius ?? 100);
@@ -1615,7 +1728,6 @@ function SettingsTab({ cafeConfig, db }) {
     playSfx('save');
     await setDoc(doc(db, 'settings', 'config'), { 
       ...cafeConfig, 
-      upiId: upi.trim(),
       lat: Number(lat),
       lng: Number(lng),
       radius: Number(radius),
@@ -1632,7 +1744,6 @@ function SettingsTab({ cafeConfig, db }) {
           <div><label className="text-xs font-bold text-slate-500 uppercase">Cafe Latitude</label><input type="number" step="any" value={lat} onChange={e => setLat(e.target.value)} className={inpStyle} required /></div>
           <div><label className="text-xs font-bold text-slate-500 uppercase">Cafe Longitude</label><input type="number" step="any" value={lng} onChange={e => setLng(e.target.value)} className={inpStyle} required /></div>
           <div><label className="text-xs font-bold text-slate-500 uppercase">Allowed Radius (Meters)</label><input type="number" value={radius} onChange={e => setRadius(e.target.value)} className={inpStyle} required /></div>
-          <div><label className="text-xs font-bold text-slate-500 uppercase">Cafe UPI ID</label><input type="text" value={upi} onChange={e => setUpi(e.target.value)} placeholder="e.g. yourname@okicici" className={inpStyle} required /></div>
           
           <div className="pt-4 border-t">
             <h2 className="text-xl font-black text-slate-900 mb-4">Café Logo</h2>
