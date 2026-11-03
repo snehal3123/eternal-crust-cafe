@@ -1,4 +1,4 @@
-Import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Coffee, Utensils, Plus, Minus, ChevronLeft, LayoutDashboard, LogOut,
   CheckCircle, Clock, ChefHat, Bell, Edit, Trash2, ToggleLeft, ToggleRight, QrCode, Printer,
@@ -248,11 +248,9 @@ export default function App() {
     const numericId = Math.floor(10000 + Math.random() * 90000).toString();
     const finalTotal = Math.max(0, total - discount);
     
-    // Check if an active order already exists for this table
     const existingActiveOrder = activeOrders.find(o => o.table === String(tbl) && o.status !== 'Completed');
 
     if (existingActiveOrder) {
-      // Append to existing active order
       const mergedItems = [...existingActiveOrder.items];
       cart.forEach(newItem => {
         const found = mergedItems.find(mi => (mi.key || mi.name) === (newItem.key || newItem.name));
