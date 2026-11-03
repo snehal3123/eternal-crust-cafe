@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Coffee, Utensils, Plus, Minus, ChevronLeft, LayoutDashboard, LogOut,
   CheckCircle, Clock, ChefHat, Bell, Edit, Trash2, ToggleLeft, ToggleRight, QrCode, Printer,
-  Banknote, X, History, Download, Image as ImageIcon, Package, AlertTriangle, Upload, IceCream, Lock, Eye, EyeOff, Settings, Volume2, VolumeX, Mic, Search, Tag, Wallet, MapPin
+  Banknote, X, History, Download, Image as ImageIcon, Package, AlertTriangle, Upload, IceCream, Lock, Eye, EyeOff, Settings, Volume2, VolumeX, Mic, Search, Tag, Wallet, MapPin, ShoppingBag
 } from 'lucide-react';
 
 /* ---------------- AUDIO & VOICE ENGINE ---------------- */
@@ -446,6 +446,7 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
   const [cart, setCart] = useState([]); 
   const [checkout, setCheckout] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showActiveOrderModal, setShowActiveOrderModal] = useState(false);
   const [selectedCoupon, setSelectedCoupon] = useState(null);
   const [couponCodeInput, setCouponCodeInput] = useState('');
   const [couponError, setCouponError] = useState('');
@@ -606,13 +607,47 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
           </Modal>
         )}
 
+        {showActiveOrderModal && tableOrder && (
+          <Modal title={`Current Active Order (#${tableOrder.id})`} onClose={() => setShowActiveOrderModal(false)}>
+            <div className="space-y-4">
+              <div className="bg-purple-50 p-3 rounded-2xl border">
+                <p className="text-xs font-bold text-purple-700 uppercase mb-2">Status: <span className="text-purple-900 font-black">{tableOrder.status}</span></p>
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                  {tableOrder.items.map((it, idx) => (
+                    <div key={idx} className="flex justify-between items-center bg-white p-2.5 rounded-xl border text-xs font-bold">
+                      <span className="flex-1">{it.name}</span>
+                      <span className="mx-3 bg-purple-100 text-purple-800 px-2 py-0.5 rounded">x{it.qty}</span>
+                      <span className="text-purple-700">₹{it.price * it.qty}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex justify-between items-center mt-3 pt-2 border-t font-black text-sm">
+                  <span>Total Bill:</span>
+                  <span className="text-purple-900 text-lg">₹{tableOrder.total}</span>
+                </div>
+              </div>
+              <p className="text-xs text-slate-500 font-medium text-center">Need to add more items? You can add items to your cart and place a new order. It will be combined or managed by the restaurant.</p>
+            </div>
+          </Modal>
+        )}
+
         <header className="bg-purple-900 px-4 pt-4 pb-3 text-white shadow-md z-10 shrink-0">
           <div className="flex items-center justify-between mb-3">
-            <button onClick={() => { playSfx('click'); setShowHistoryModal(true); }} className="p-2 -ml-2 bg-purple-800 rounded-full flex items-center gap-1 text-xs font-bold"><History className="w-4 h-4"/> Orders</button>
-            <div className="bg-purple-950/50 px-4 py-1.5 rounded-full border border-purple-700/50"><h1 className="text-sm font-black tracking-widest uppercase text-purple-200">Table {tableNumber} | {customerName || 'Guest'}</h1></div>
             {onExit && status !== 'Pending' && status !== 'Preparing' ? (
-              <button onClick={() => { playSfx('click'); onExit(); }} className="p-2 -mr-2 bg-purple-800 rounded-full flex items-center gap-1 text-xs font-bold"><ChevronLeft className="w-4 h-4"/> Exit</button>
-            ) : <div className="w-9 h-9" />}
+              <button onClick={() => { playSfx('click'); onExit(); }} className="p-2 -ml-2 bg-purple-800 rounded-full flex items-center gap-1 text-xs font-bold"><ChevronLeft className="w-4 h-4"/> Exit</button>
+            ) : <button onClick={() => { playSfx('click'); setShowHistoryModal(true); }} className="p-2 -ml-2 bg-purple-800 rounded-full flex items-center gap-1 text-xs font-bold"><History className="w-4 h-4"/> Orders</button>}
+            
+            <div className="bg-purple-950/50 px-3 py-1.5 rounded-full border border-purple-700/50"><h1 className="text-xs font-black tracking-widest uppercase text-purple-200">Table {tableNumber} | {customerName || 'Guest'}</h1></div>
+            
+            <div className="flex items-center gap-1">
+              {tableOrder && (
+                <button onClick={() => { playSfx('click'); setShowActiveOrderModal(true); }} className="p-2 bg-emerald-600 hover:bg-emerald-700 rounded-full text-white relative animate-pulse flex items-center justify-center">
+                  <ShoppingBag className="w-4 h-4"/>
+                  <span className="absolute -top-1 -right-1 bg-amber-400 text-slate-900 text-[9px] font-black w-3.5 h-3.5 flex items-center justify-center rounded-full">!</span>
+                </button>
+              )}
+              <button onClick={() => { playSfx('click'); setShowHistoryModal(true); }} className="p-2 bg-purple-800 rounded-full flex items-center gap-1 text-xs font-bold"><History className="w-4 h-4"/></button>
+            </div>
           </div>
 
           <div className="flex gap-2 mb-3">
@@ -620,8 +655,8 @@ function CustomerView({ tableNumber, customerName, customerPhone, menuItems, act
               <Search className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
               <input type="text" placeholder="Search food..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-white/10 backdrop-blur-md border border-purple-700/50 rounded-2xl pl-10 pr-4 py-2.5 text-sm font-bold text-white placeholder-purple-300 outline-none focus:bg-white focus:text-slate-900 transition-all" />
             </div>
-            <select value={sortOrder} onChange={e => setSortOrder(e.target.value)} className="bg-purple-800 text-purple-100 border border-purple-700 rounded-2xl px-3 py-2.5 text-xs font-bold outline-none">
-              <option value="default" className="text-slate-900">Sort</option>
+            <select value={sortOrder} onChange={e => setSortOrder(e.target.value)} className="bg-purple-800 text-purple-100 border border-purple-700 rounded-2xl px-2 py-2.5 text-xs font-bold outline-none max-w-[95px]">
+              <option value="default" className="text-slate-900">Filter</option>
               <option value="lowToHigh" className="text-slate-900">Price: Low to High</option>
               <option value="highToLow" className="text-slate-900">Price: High to Low</option>
             </select>
@@ -929,28 +964,30 @@ function AdminAddOrderModal({ menuItems, tables, placeOrder, onClose }) {
   const [custName, setCustName] = useState('');
   const [custPhone, setCustPhone] = useState('');
   const [cart, setCart] = useState([]);
-  const [selectedMenuId, setSelectedMenuId] = useState('');
-  const [selectedVariant, setSelectedVariant] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
-  const selectedItemObj = menuItems.find(m => m.id === selectedMenuId);
+  const filteredSuggestions = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    return menuItems.filter(m => m.stock && m.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  }, [menuItems, searchQuery]);
 
-  const addItem = () => {
-    if (!selectedItemObj) return playSfx('error');
+  const addItem = (menuItem, variantName = null, variantPrice = null) => {
     playSfx('add');
-    let name = selectedItemObj.name;
-    let price = selectedItemObj.price;
-    if (selectedItemObj.v && selectedItemObj.v.length > 0) {
-      const v = selectedItemObj.v.find(x => x[0] === selectedVariant) || selectedItemObj.v[0];
-      name = `${selectedItemObj.name} (${v[0]})`;
-      price = v[1];
+    let name = menuItem.name;
+    let price = variantPrice !== null ? variantPrice : menuItem.price;
+    if (variantName) {
+      name = `${menuItem.name} (${variantName})`;
     }
-    const key = selectedItemObj.id + '_' + (selectedVariant || 'default');
+    const key = menuItem.id + '_' + (variantName || 'default');
     const existing = cart.find(c => c.key === key);
     if (existing) {
       setCart(cart.map(c => c.key === key ? { ...c, qty: c.qty + 1 } : c));
     } else {
       setCart([...cart, { key, name, price, qty: 1 }]);
     }
+    setSearchQuery('');
+    setShowSuggestions(false);
   };
 
   const chgQty = (key, d) => {
@@ -983,19 +1020,32 @@ function AdminAddOrderModal({ menuItems, tables, placeOrder, onClose }) {
           <div><label className="text-xs font-bold text-slate-500 uppercase">Phone (WhatsApp)</label><input type="tel" value={custPhone} onChange={e => setCustPhone(e.target.value)} placeholder="9876543210" className={inpStyle + ' py-2 text-xs'} maxLength={10} /></div>
         </div>
 
-        <div className="bg-slate-50 p-3 rounded-xl border">
-          <label className="text-xs font-black text-slate-700 uppercase mb-2 block">Add Items</label>
-          <div className="flex gap-2 mb-2">
-            <select value={selectedMenuId} onChange={e => { setSelectedMenuId(e.target.value); const m = menuItems.find(x => x.id === e.target.value); if(m?.v?.length) setSelectedVariant(m.v[0][0]); }} className={inpStyle + ' py-2 text-xs bg-white flex-1'}>
-              <option value="">Select menu item...</option>
-              {menuItems.filter(m => m.stock).map(m => <option key={m.id} value={m.id}>{m.name} (₹{m.v && m.v.length ? m.v[0][1] : m.price})</option>)}
-            </select>
-            {selectedItemObj?.v && selectedItemObj.v.length > 0 && (
-              <select value={selectedVariant} onChange={e => setSelectedVariant(e.target.value)} className={inpStyle + ' py-2 text-xs bg-white w-28'}>
-                {selectedItemObj.v.map(v => <option key={v[0]} value={v[0]}>{v[0]}</option>)}
-              </select>
+        <div className="bg-slate-50 p-3 rounded-xl border relative">
+          <label className="text-xs font-black text-slate-700 uppercase mb-2 block">Search & Suggest Items</label>
+          <div className="relative mb-2">
+            <input type="text" value={searchQuery} onChange={e => { setSearchQuery(e.target.value); setShowSuggestions(true); }} placeholder="Type item name to suggest..." className={inpStyle + ' py-2 text-xs bg-white'} />
+            {showSuggestions && filteredSuggestions.length > 0 && (
+              <div className="absolute top-full left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-xl mt-1 z-30 max-h-40 overflow-y-auto">
+                {filteredSuggestions.map(m => (
+                  <div key={m.id} className="p-2 border-b last:border-0 hover:bg-purple-50 text-xs">
+                    <p className="font-black text-slate-900">{m.name}</p>
+                    {m.v && m.v.length > 0 ? (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {m.v.map(v => (
+                          <button key={v[0]} type="button" onClick={() => addItem(m, v[0], v[1])} className="px-2 py-0.5 bg-purple-100 text-purple-800 rounded font-bold text-[10px]">
+                            {v[0]}: ₹{v[1]}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <button type="button" onClick={() => addItem(m)} className="mt-1 px-2 py-0.5 bg-purple-700 text-white rounded font-bold text-[10px]">
+                        Add ₹{m.price}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
             )}
-            <button type="button" onClick={addItem} className="bg-purple-700 text-white px-4 py-2 rounded-xl text-xs font-bold">Add</button>
           </div>
 
           <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
@@ -1025,25 +1075,23 @@ function AdminAddOrderModal({ menuItems, tables, placeOrder, onClose }) {
 
 function CustomizeOrderModal({ order, menuItems, db, onClose }) {
   const [items, setItems] = useState(order.items || []);
-  const [selectedMenuId, setSelectedMenuId] = useState('');
-  const [selectedVariant, setSelectedVariant] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
-  const selectedItemObj = menuItems.find(m => m.id === selectedMenuId);
+  const filteredSuggestions = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    return menuItems.filter(m => m.stock && m.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  }, [menuItems, searchQuery]);
 
-  const addItemToOrder = () => {
-    if (!selectedItemObj) return playSfx('error');
+  const addItemToOrder = (menuItem, variantName = null, variantPrice = null) => {
     playSfx('add');
-
-    let itemName = selectedItemObj.name;
-    let itemPrice = selectedItemObj.price;
-
-    if (selectedItemObj.v && selectedItemObj.v.length > 0) {
-      const vObj = selectedItemObj.v.find(x => x[0] === selectedVariant) || selectedItemObj.v[0];
-      itemName = `${selectedItemObj.name} (${vObj[0]})`;
-      itemPrice = vObj[1];
+    let itemName = menuItem.name;
+    let itemPrice = variantPrice !== null ? variantPrice : menuItem.price;
+    if (variantName) {
+      itemName = `${menuItem.name} (${variantName})`;
     }
 
-    const key = selectedItemObj.id + '_' + (selectedVariant || 'default');
+    const key = menuItem.id + '_' + (variantName || 'default');
     const existing = items.find(i => (i.key || i.name) === key);
 
     if (existing) {
@@ -1051,6 +1099,8 @@ function CustomizeOrderModal({ order, menuItems, db, onClose }) {
     } else {
       setItems([...items, { key, name: itemName, price: itemPrice, qty: 1 }]);
     }
+    setSearchQuery('');
+    setShowSuggestions(false);
   };
 
   const updateQty = (key, delta) => {
@@ -1097,21 +1147,32 @@ function CustomizeOrderModal({ order, menuItems, db, onClose }) {
           </div>
         </div>
 
-        <div className="border-t pt-3">
-          <p className="text-xs font-black text-slate-700 uppercase mb-2">Add New Item to Order</p>
-          <div className="space-y-2">
-            <select value={selectedMenuId} onChange={e => { setSelectedMenuId(e.target.value); const m = menuItems.find(x => x.id === e.target.value); if(m?.v?.length) setSelectedVariant(m.v[0][0]); }} className={inpStyle + ' py-2.5 text-xs bg-white'}>
-              <option value="">Select food item...</option>
-              {menuItems.filter(m => m.stock).map(m => <option key={m.id} value={m.id}>{m.name} (₹{m.v && m.v.length ? m.v[0][1] : m.price})</option>)}
-            </select>
-
-            {selectedItemObj?.v && selectedItemObj.v.length > 0 && (
-              <select value={selectedVariant} onChange={e => setSelectedVariant(e.target.value)} className={inpStyle + ' py-2.5 text-xs bg-white'}>
-                {selectedItemObj.v.map(v => <option key={v[0]} value={v[0]}>{v[0]} - ₹{v[1]}</option>)}
-              </select>
+        <div className="border-t pt-3 relative">
+          <p className="text-xs font-black text-slate-700 uppercase mb-2">Search & Suggest Item to Add</p>
+          <div className="relative">
+            <input type="text" value={searchQuery} onChange={e => { setSearchQuery(e.target.value); setShowSuggestions(true); }} placeholder="Type to suggest item..." className={inpStyle + ' py-2.5 text-xs bg-white'} />
+            {showSuggestions && filteredSuggestions.length > 0 && (
+              <div className="absolute top-full left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-xl mt-1 z-30 max-h-40 overflow-y-auto">
+                {filteredSuggestions.map(m => (
+                  <div key={m.id} className="p-2 border-b last:border-0 hover:bg-purple-50 text-xs">
+                    <p className="font-black text-slate-900">{m.name}</p>
+                    {m.v && m.v.length > 0 ? (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {m.v.map(v => (
+                          <button key={v[0]} type="button" onClick={() => addItemToOrder(m, v[0], v[1])} className="px-2 py-0.5 bg-purple-100 text-purple-800 rounded font-bold text-[10px]">
+                            {v[0]}: ₹{v[1]}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <button type="button" onClick={() => addItemToOrder(m)} className="mt-1 px-2 py-0.5 bg-purple-700 text-white rounded font-bold text-[10px]">
+                        Add ₹{m.price}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
             )}
-
-            <button type="button" onClick={addItemToOrder} className="w-full bg-slate-800 text-white font-bold py-2.5 rounded-xl text-xs">Add to Order List</button>
           </div>
         </div>
 
